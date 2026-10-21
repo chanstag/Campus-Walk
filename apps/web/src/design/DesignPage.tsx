@@ -1,5 +1,5 @@
 import { MoonIcon, SunIcon } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Icons, type LucideIcon } from "@/components/icons";
+import TypeCompare from "./TypeCompare";
 
 /**
  * Living style guide. Renders every token and component so edits to
@@ -64,7 +65,9 @@ function useTheme() {
       return false;
     }
   });
-  useEffect(() => {
+  // Layout effect: child <Swatch> effects run before this parent's effects,
+  // so a plain useEffect would let them read the previous mode's values.
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     try {
       localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
@@ -93,7 +96,7 @@ function useAccent() {
       return "default";
     }
   });
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (accent === "default") delete document.documentElement.dataset.accent;
     else document.documentElement.dataset.accent = accent;
     try {
@@ -158,7 +161,6 @@ const PALETTES = [
 ];
 const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 
-const TYPE_SCALE = ["text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl"];
 
 // ---------- page ----------
 
@@ -232,19 +234,8 @@ export default function DesignPage() {
           <RadiusRow dep={dep} />
         </Section>
 
-        <Section title="Typography">
-          <div className="flex flex-col gap-2">
-            {TYPE_SCALE.map((cls) => (
-              <div key={cls} className="flex items-baseline gap-4">
-                <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">{cls}</span>
-                <span className={cls}>Campus Walk Assessment</span>
-              </div>
-            ))}
-            <div className="flex items-baseline gap-4">
-              <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">mono</span>
-              <span className="font-mono text-sm">BLDG-014 · 2026-10-20T14:32 · score 87/100</span>
-            </div>
-          </div>
+        <Section title="Typography" hint="Pick a typeface per column. Preview on page swaps the whole page's font.">
+          <TypeCompare />
         </Section>
 
         <Section
