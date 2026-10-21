@@ -112,6 +112,8 @@ Monorepo managed with pnpm. `apps/api` is a Fastify server exposing a tRPC route
 ```bash
 pnpm install          # install both apps
 pnpm db:setup         # one-time: sign in to Neon in the browser, create the "campus-walk" project, write apps/api/.env
+pnpm --filter api db:migrate   # create the tables
+pnpm db:seed          # load the sample district (truncates first)
 pnpm dev              # API on http://localhost:3001, web on http://localhost:5173
 ```
 
@@ -130,7 +132,8 @@ Layout:
 
 ```
 apps/api/src/router.ts    tRPC procedures; exports AppRouter type consumed by the web app
-apps/api/src/db/schema.ts Drizzle schema (empty until the data model is settled)
+apps/api/src/db/schema.ts Drizzle schema: district → campus → building → floor → room → asset, + asset_type
+apps/api/src/db/seed.ts   loads sample_data/campus_walk_sample_data (see CLAUDE.md "Data model" for the rules)
 apps/web/src/trpc.ts      typed tRPC client + React hooks
 apps/web/src/App.tsx      calls hello + health to prove the full stack
 scripts/setup-neon.mjs    Neon provisioning

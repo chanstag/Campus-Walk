@@ -6,7 +6,8 @@
     "dev": "pnpm -r --parallel --stream dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "db:setup": "node scripts/setup-neon.mjs"
+    "db:setup": "node scripts/setup-neon.mjs",
+    "db:seed": "pnpm --filter api db:seed"
   },
   "engines": {
     "node": ">=20"
@@ -14,5 +15,10 @@
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
     "log4brains": "^1.1.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.3.0"
+    }
   }
 }

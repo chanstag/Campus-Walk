@@ -1,7 +1,219 @@
-// Drizzle schema. Intentionally empty for now.
+// Drizzle schema for Campus Walk.
 //
-// The data model (Campus -> Building -> Floor -> Room -> Asset, and whether
-// Assessment/Finding are separate entities) has not been settled yet. Add
-// pgTable definitions here, then run `pnpm --filter api db:generate` to create
-// a migration.
-export {};
+// Hierarchy: district -> campus -> building -> floor -> room -> asset.
+// Assets hang off a building (required) and optionally a room: building
+// systems (roof, HVAC, boiler) and newly delivered, not-yet-placed equipment
+// have no room. Condition is a 1-5 integer (see CONDITION_SCALE) stored
+// directly on room and asset as the current state; per-walk history is a
+// later migration (see CLAUDE.md).
+//
+// After editing: `pnpm --filter api db:generate` then `pnpm --filter api db:migrate`.
+
+import { relations, sql } from "drizzle-orm";
+import {
+  type AnyPgColumn,
+  boolean,
+  check,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  smallint,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+/** 1 = Critical ... 5 = Excellent. Labels and descriptions are app constants, not a table. */
+export const CONDITION_SCALE = {
+  1: { label: "Critical", description: "Failed or unsafe; replace now" },
+  2: { label: "Poor", description: "Major wear; replace within 1-2 years" },
+  3: { label: "Fair", description: "Functional with visible wear" },
+  4: { label: "Good", description: "Minor wear" },
+  5: { label: "Excellent", description: "New or like new" },
+} as const;
+export type ConditionRating = keyof typeof CONDITION_SCALE;
+
+const id = uuid("id").primaryKey().defaultRandom();
+const createdAt = timestamp("created_at", { withTimezone: true })
+  .notNull()
+  .defaultNow();
+const updatedAt = timestamp("updated_at", { withTimezone: true })
+  .notNull()
+  .defaultNow()
+  .$onUpdate(() => new Date());
+
+/** Current-state assessment columns shared by room and asset. */
+const assessment = {
+  condition: smallint("condition"),
+  notes: text("notes"),
+  assessedAt: timestamp("assessed_at", { withTimezone: true }),
+  assessedBy: text("assessed_by"), // free text until BetterAuth lands, then a user FK
+};
+const conditionCheck = (name: string, col: AnyPgColumn) =>
+  check(`${name}_condition_range`, sql`${col} between 1 and 5`);
+
+export const district = pgTable("district", {
+  id,
+  name: text("name").notNull(),
+  createdAt,
+  updatedAt,
+});
+
+export const campus = pgTable(
+  "campus",
+  {
+    id,
+    districtId: uuid("district_id")
+      .notNull()
+      .references(() => district.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    campusType: text("campus_type"),
+    address: text("address"),
+    yearOpened: integer("year_opened"),
+    siteAcres: numeric("site_acres", { precision: 8, scale: 2 }),
+    createdAt,
+    updatedAt,
+  },
+  (t) => [index("campus_district_idx").on(t.districtId)],
+);
+
+export const building = pgTable(
+  "building",
+  {
+    id,
+    campusId: uuid("campus_id")
+      .notNull()
+      .references(() => campus.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    buildingType: text("building_type"),
+    yearBuilt: integer("year_built"),
+    grossSf: integer("gross_sf"),
+    createdAt,
+    updatedAt,
+  },
+  (t) => [index("building_campus_idx").on(t.campusId)],
+);
+
+export const floor = pgTable(
+  "floor",
+  {
+    id,
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => building.id, { onDelete: "cascade" }),
+    level: integer("level").notNull(),
+    name: text("name").notNull(),
+    createdAt,
+    updatedAt,
+  },
+  (t) => [
+    unique("floor_building_level").on(t.buildingId, t.level),
+    index("floor_building_idx").on(t.buildingId),
+  ],
+);
+
+export const room = pgTable(
+  "room",
+  {
+    id,
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => floor.id, { onDelete: "cascade" }),
+    number: text("number").notNull(),
+    name: text("name").notNull(),
+    roomType: text("room_type"),
+    areaSf: integer("area_sf"),
+    capacity: integer("capacity"),
+    ...assessment,
+    createdAt,
+    updatedAt,
+  },
+  (t) => [
+    unique("room_floor_number").on(t.floorId, t.number),
+    index("room_floor_idx").on(t.floorId),
+    conditionCheck("room", t.condition),
+  ],
+);
+
+export const assetType = pgTable("asset_type", {
+  id,
+  category: text("category").notNull(), // Furniture | Technology | Equipment | Building System
+  name: text("name").notNull(),
+  usefulLifeYears: integer("useful_life_years"),
+  typicallyBuildingLevel: boolean("typically_building_level")
+    .notNull()
+    .default(false),
+  createdAt,
+  updatedAt,
+});
+
+export const asset = pgTable(
+  "asset",
+  {
+    id,
+    assetTypeId: uuid("asset_type_id")
+      .notNull()
+      .references(() => assetType.id, { onDelete: "restrict" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => building.id, { onDelete: "cascade" }),
+    /** Null for building-level systems and for delivered-but-unplaced equipment. */
+    roomId: uuid("room_id").references(() => room.id, { onDelete: "set null" }),
+    assetTag: text("asset_tag").unique(),
+    /** Bulk furniture is one row with a count; tagged equipment is quantity 1. */
+    quantity: integer("quantity").notNull().default(1),
+    manufacturer: text("manufacturer"),
+    model: text("model"),
+    serialNumber: text("serial_number"),
+    installYear: integer("install_year"),
+    ...assessment,
+    createdAt,
+    updatedAt,
+  },
+  (t) => [
+    index("asset_building_idx").on(t.buildingId),
+    index("asset_room_idx").on(t.roomId),
+    index("asset_type_idx").on(t.assetTypeId),
+    conditionCheck("asset", t.condition),
+    check("asset_quantity_positive", sql`${t.quantity} > 0`),
+  ],
+);
+
+// ---------- relations (drizzle relational query API) ----------
+
+export const districtRelations = relations(district, ({ many }) => ({
+  campuses: many(campus),
+}));
+
+export const campusRelations = relations(campus, ({ one, many }) => ({
+  district: one(district, { fields: [campus.districtId], references: [district.id] }),
+  buildings: many(building),
+}));
+
+export const buildingRelations = relations(building, ({ one, many }) => ({
+  campus: one(campus, { fields: [building.campusId], references: [campus.id] }),
+  floors: many(floor),
+  assets: many(asset),
+}));
+
+export const floorRelations = relations(floor, ({ one, many }) => ({
+  building: one(building, { fields: [floor.buildingId], references: [building.id] }),
+  rooms: many(room),
+}));
+
+export const roomRelations = relations(room, ({ one, many }) => ({
+  floor: one(floor, { fields: [room.floorId], references: [floor.id] }),
+  assets: many(asset),
+}));
+
+export const assetTypeRelations = relations(assetType, ({ many }) => ({
+  assets: many(asset),
+}));
+
+export const assetRelations = relations(asset, ({ one }) => ({
+  assetType: one(assetType, { fields: [asset.assetTypeId], references: [assetType.id] }),
+  building: one(building, { fields: [asset.buildingId], references: [building.id] }),
+  room: one(room, { fields: [asset.roomId], references: [room.id] }),
+}));

@@ -10,7 +10,7 @@ The repo root for code is this `Campus Walk/` directory. The parent directory ho
 
 ## Commands
 
-pnpm workspace (`apps/*`). Node >= 20, pnpm 10. Run from this directory unless noted.
+pnpm workspace (`apps/*`). Node >= 20, pnpm 10. Run from this directory unless noted. Root `package.json` pins `@types/react` via `pnpm.overrides` because log4brains drags in v17 types, which otherwise get hoisted and break JSX typing for `@trpc/tanstack-react-query`.
 
 ```bash
 pnpm install
@@ -23,6 +23,7 @@ pnpm --filter api dev            # one app only (likewise --filter web)
 pnpm --filter api db:generate    # drizzle-kit: migration from src/db/schema.ts into apps/api/drizzle/
 pnpm --filter api db:migrate
 pnpm --filter api db:studio
+pnpm db:seed                     # TRUNCATES all tables, then loads sample_data/campus_walk_sample_data
 ```
 
 There is no test runner or linter configured yet. `pnpm typecheck` is the only verification step.
@@ -33,14 +34,27 @@ The API port is 3001 (not 3000) because 3000 is taken by another service on the 
 
 **End-to-end typing via tRPC.** `apps/api/src/router.ts` exports `AppRouter`. The web app imports that type directly from the api workspace (`import type { AppRouter } from "api/src/router"` in `apps/web/src/trpc.ts`), so `api` is a `workspace:*` devDependency of `web`. Changing a procedure's input/output in the router is immediately reflected in web type errors. Never duplicate request/response types on the client.
 
-**API (`apps/api`)** is Fastify 5 with `@trpc/server`'s fastify adapter mounted at `/trpc`, plus a plain `/health` route. `src/trpc.ts` builds the tRPC context (`{ req, res, db }`) and exports `router` / `publicProcedure`; `src/db/client.ts` creates the Drizzle client over `@neondatabase/serverless` HTTP and throws at import time if `DATABASE_URL` is unset. API tsconfig uses `NodeNext`, so intra-api imports need `.js` extensions (`./router.js`). Inputs are validated with zod v4.
+**API (`apps/api`)** is Fastify 5 with `@trpc/server`'s fastify adapter mounted at `/trpc`, plus a plain `/health` route. `src/trpc.ts` builds the tRPC context (`{ req, res, db }`), sets superjson as the transformer (so `Date` columns arrive on the client as `Date`, and GET inputs in curl are wrapped as `{"json": {...}}`), and exports `router` / `publicProcedure`. Procedures live in `src/routers/`, one file per hierarchy level (`campus.ts`, `asset.ts`, `assetType.ts`; `building`/`floor`/`room` slot in the same way), merged in `src/router.ts`, which also exports `RouterOutputs` for the web app. Reads use Drizzle's relational query API (`ctx.db.query.campus.findFirst({ with: ... })`); the `relations()` definitions are at the bottom of `src/db/schema.ts`. RQB v1 cannot order by a related table's column, so sort in JS after the fetch. `src/db/client.ts` creates the Drizzle client over `@neondatabase/serverless` HTTP and throws at import time if `DATABASE_URL` is unset. API tsconfig uses `NodeNext`, so intra-api imports need `.js` extensions (`./router.js`). Inputs are validated with zod v4 (`z.uuid()`).
+
+**Fetch shape for the field UI.** `campus.tree` returns one campus → buildings → floors → rooms in a single call, without assets. Assets load lazily: `asset.byRoom` for a room, `asset.byBuilding` for a building's room-less assets (building systems and unplaced equipment, split client-side on `assetType.typicallyBuildingLevel`).
 
 **Web (`apps/web`)** is Vite 8 + React 19. `src/main.tsx` wires TanStack Query + `@trpc/tanstack-react-query` (`createTRPCContext`, `useTRPC()` then `useQuery(trpc.x.queryOptions(...))`). There is no router yet; `main.tsx` does a hardcoded pathname check to serve `/design`. `@/` aliases `src/`.
 
 **Design system.** shadcn (style `base-nova`, built on `@base-ui/react`, not Radix) + Tailwind v4. Components are generated into `src/components/ui/`; add more with the shadcn CLI, not by hand. `src/palette.css` holds raw VLK brand color ramps (`--color-<name>-<step>`); `src/index.css` maps them to semantic tokens (`--primary`, `--background`, …) with a `.dark` variant and `[data-accent]` overrides. `src/design/DesignPage.tsx` is a living style guide at `/design` that renders every token and component. When changing tokens, edit `index.css` and check `/design` in both modes.
 
-**Database.** Drizzle + Neon Postgres. `apps/api/src/db/schema.ts` is intentionally empty: the data model (and whether Assessment/Finding are separate entities from Room/Asset) is not settled. Define `pgTable`s there, then `db:generate` + `db:migrate`. `scripts/setup-neon.mjs` uses `npx neonctl` non-interactively; env knobs `NEON_PROJECT_NAME`, `NEON_REGION`, `NEON_ORG_ID`, `NEON_API_KEY`.
+**Database.** Drizzle + Neon Postgres over the HTTP driver (no interactive transactions; batch inserts instead). Schema in `apps/api/src/db/schema.ts`, migrations in `apps/api/drizzle/`. Edit the schema, then `db:generate` + `db:migrate`. `scripts/setup-neon.mjs` uses `npx neonctl` non-interactively; env knobs `NEON_PROJECT_NAME`, `NEON_REGION`, `NEON_ORG_ID`, `NEON_API_KEY`.
+
+## Data model
+
+`district → campus → building → floor → room → asset`, plus an `asset_type` catalog. UUID primary keys, `created_at`/`updated_at` everywhere, cascading deletes down the hierarchy. Decisions that are easy to get wrong when writing queries or UI:
+
+- **Assets belong to a building, optionally a room.** `asset.building_id` is required; `asset.room_id` is nullable. A null room means either a building-level system (roof, HVAC, boiler) or delivered-but-unplaced equipment. The two are distinguished only by `asset_type.typically_building_level`, not by a column on the asset. Campus and floor of an asset are derived by joining, never stored.
+- **Quantity matters.** Bulk furniture is one asset row with `quantity > 1`; tagged equipment is `quantity = 1` with a unique `asset_tag`. Any "items by condition" metric must `sum(quantity)`, not `count(*)`.
+- **Condition is a 1–5 smallint** (1 Critical … 5 Excellent) with a check constraint. Labels live in `CONDITION_SCALE` in `schema.ts`, not in a table.
+- **Assessment is current state, not history.** `condition`, `notes`, `assessed_at`, `assessed_by` sit directly on `room` and `asset`. "Unassessed" means `assessed_at is null`. `assessed_by` is free text until BetterAuth adds a user table. Per-walk history (an observation table per walk) is a planned later migration: create the table, backfill one row per entity from these columns, drop them.
+- **Every building has at least one floor**, even single-story ones. `room.floor_id` is required.
+- **Sample ids are not stored.** The seed maps `C-100` / `B-101` / `R-101-101` / `A-00001` to fresh UUIDs in memory. Room numbers and asset tags are the human-readable identifiers.
 
 ## Planned but not yet present
 
-From the README: BetterAuth for auth/sessions, roles `field` and `admin` with a hybrid RBAC/ABAC permission layer that also drives UI visibility, photos and notes on assets, offline capability. None of this exists in code yet; do not assume helpers for it.
+From the README: BetterAuth for auth/sessions, roles `field` and `admin` with a hybrid RBAC/ABAC permission layer that also drives UI visibility, photos on rooms and assets, per-walk assessment history, offline capability. None of this exists in code yet; do not assume helpers for it.
