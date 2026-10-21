@@ -1,0 +1,127 @@
+/*
+ * VLK brand palette, extracted from imagery on vlkarchitects.com via coolors.co.
+ * Raw ramps only. Semantic tokens (--primary, --background, …) live in index.css
+ * and reference these. `static` emits every variable so index.css can use them
+ * even when no utility class does.
+ */
+@theme static {
+  --color-desert-sand-50: #f7f2ed;
+  --color-desert-sand-100: #f0e5db;
+  --color-desert-sand-200: #e1cbb7;
+  --color-desert-sand-300: #d2b093;
+  --color-desert-sand-400: #c3966f;
+  --color-desert-sand-500: #b47c4b;
+  --color-desert-sand-600: #90633c;
+  --color-desert-sand-700: #6c4a2d;
+  --color-desert-sand-800: #48321e;
+  --color-desert-sand-900: #24190f;
+  --color-desert-sand-950: #19110b;
+
+  --color-rosy-granite-50: #f3f2f1;
+  --color-rosy-granite-100: #e7e5e4;
+  --color-rosy-granite-200: #cfcbc9;
+  --color-rosy-granite-300: #b7b1ae;
+  --color-rosy-granite-400: #9f9793;
+  --color-rosy-granite-500: #877d78;
+  --color-rosy-granite-600: #6c6460;
+  --color-rosy-granite-700: #514b48;
+  --color-rosy-granite-800: #363230;
+  --color-rosy-granite-900: #1b1918;
+  --color-rosy-granite-950: #131111;
+
+  --color-faded-copper-50: #f6f2ee;
+  --color-faded-copper-100: #ede5de;
+  --color-faded-copper-200: #dccabc;
+  --color-faded-copper-300: #cab09b;
+  --color-faded-copper-400: #b99679;
+  --color-faded-copper-500: #a77c58;
+  --color-faded-copper-600: #866346;
+  --color-faded-copper-700: #644a35;
+  --color-faded-copper-800: #433123;
+  --color-faded-copper-900: #211912;
+  --color-faded-copper-950: #17110c;
+
+  --color-dark-coffee-50: #f8f0ed;
+  --color-dark-coffee-100: #f1e1da;
+  --color-dark-coffee-200: #e2c4b6;
+  --color-dark-coffee-300: #d4a691;
+  --color-dark-coffee-400: #c6896c;
+  --color-dark-coffee-500: #b86b47;
+  --color-dark-coffee-600: #935639;
+  --color-dark-coffee-700: #6e402b;
+  --color-dark-coffee-800: #492b1d;
+  --color-dark-coffee-900: #25150e;
+  --color-dark-coffee-950: #1a0f0a;
+
+  --color-alabaster-grey-50: #f4f2f1;
+  --color-alabaster-grey-100: #e8e6e3;
+  --color-alabaster-grey-200: #d1ccc7;
+  --color-alabaster-grey-300: #bab3ab;
+  --color-alabaster-grey-400: #a3998f;
+  --color-alabaster-grey-500: #8c8073;
+  --color-alabaster-grey-600: #70665c;
+  --color-alabaster-grey-700: #544d45;
+  --color-alabaster-grey-800: #38332e;
+  --color-alabaster-grey-900: #1c1a17;
+  --color-alabaster-grey-950: #141210;
+
+  --color-charcoal-50: #f3f2f2;
+  --color-charcoal-100: #e6e5e5;
+  --color-charcoal-200: #cecacb;
+  --color-charcoal-300: #b5b0b1;
+  --color-charcoal-400: #9c9697;
+  --color-charcoal-500: #837c7d;
+  --color-charcoal-600: #696364;
+  --color-charcoal-700: #4f4a4b;
+  --color-charcoal-800: #353132;
+  --color-charcoal-900: #1a1919;
+  --color-charcoal-950: #121112;
+
+  --color-raw-umber-50: #fff0e5;
+  --color-raw-umber-100: #ffe1cc;
+  --color-raw-umber-200: #ffc499;
+  --color-raw-umber-300: #ffa666;
+  --color-raw-umber-400: #ff8833;
+  --color-raw-umber-500: #ff6a00;
+  --color-raw-umber-600: #cc5500;
+  --color-raw-umber-700: #994000;
+  --color-raw-umber-800: #662b00;
+  --color-raw-umber-900: #331500;
+  --color-raw-umber-950: #240f00;
+
+  --color-cool-steel-50: #f0f2f4;
+  --color-cool-steel-100: #e2e5e9;
+  --color-cool-steel-200: #c5ccd3;
+  --color-cool-steel-300: #a8b2bd;
+  --color-cool-steel-400: #8b99a7;
+  --color-cool-steel-500: #6e7f91;
+  --color-cool-steel-600: #586674;
+  --color-cool-steel-700: #424c57;
+  --color-cool-steel-800: #2c333a;
+  --color-cool-steel-900: #16191d;
+  --color-cool-steel-950: #0f1214;
+
+  --color-dark-walnut-50: #feeee6;
+  --color-dark-walnut-100: #feddcd;
+  --color-dark-walnut-200: #fdba9b;
+  --color-dark-walnut-300: #fc9869;
+  --color-dark-walnut-400: #fb7537;
+  --color-dark-walnut-500: #fa5305;
+  --color-dark-walnut-600: #c84204;
+  --color-dark-walnut-700: #963203;
+  --color-dark-walnut-800: #642102;
+  --color-dark-walnut-900: #321101;
+  --color-dark-walnut-950: #230c01;
+
+  --color-dim-grey-50: #f3f2f2;
+  --color-dim-grey-100: #e7e6e4;
+  --color-dim-grey-200: #cfcdc9;
+  --color-dim-grey-300: #b6b4af;
+  --color-dim-grey-400: #9e9b94;
+  --color-dim-grey-500: #868279;
+  --color-dim-grey-600: #6b6861;
+  --color-dim-grey-700: #504e49;
+  --color-dim-grey-800: #363430;
+  --color-dim-grey-900: #1b1a18;
+  --color-dim-grey-950: #131211;
+}

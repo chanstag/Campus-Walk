@@ -1,0 +1,511 @@
+import { MoonIcon, SunIcon } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+
+/**
+ * Living style guide. Renders every token and component so edits to
+ * src/index.css can be reviewed in one place, in both color modes.
+ * Served at /design (see main.tsx). Not part of the product UI.
+ */
+
+// ---------- theme ----------
+
+const THEME_KEY = "campus-walk:theme";
+
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) === "dark";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    try {
+      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    } catch {
+      /* storage unavailable */
+    }
+  }, [dark]);
+  return [dark, setDark] as const;
+}
+
+const ACCENT_KEY = "campus-walk:accent";
+/** Accent candidates. Each non-default value has a [data-accent] override block in index.css. */
+const ACCENTS = [
+  { id: "default", label: "Dark coffee" },
+  { id: "raw-umber", label: "Raw umber" },
+  { id: "dark-walnut", label: "Dark walnut" },
+] as const;
+type AccentId = (typeof ACCENTS)[number]["id"];
+
+function useAccent() {
+  const [accent, setAccent] = useState<AccentId>(() => {
+    try {
+      const v = localStorage.getItem(ACCENT_KEY);
+      return ACCENTS.some((a) => a.id === v) ? (v as AccentId) : "default";
+    } catch {
+      return "default";
+    }
+  });
+  useEffect(() => {
+    if (accent === "default") delete document.documentElement.dataset.accent;
+    else document.documentElement.dataset.accent = accent;
+    try {
+      localStorage.setItem(ACCENT_KEY, accent);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [accent]);
+  return [accent, setAccent] as const;
+}
+
+/** Reads the resolved value of a CSS custom property, re-reading when `dep` changes. */
+function useCssVar(name: string, dep: unknown) {
+  const [value, setValue] = useState("");
+  useEffect(() => {
+    setValue(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+  }, [name, dep]);
+  return value;
+}
+
+// ---------- tokens ----------
+
+/** [background var, foreground var | null]. Pairs render text on the bg to check contrast. */
+const COLOR_PAIRS: Array<[string, string | null]> = [
+  ["background", "foreground"],
+  ["card", "card-foreground"],
+  ["popover", "popover-foreground"],
+  ["primary", "primary-foreground"],
+  ["secondary", "secondary-foreground"],
+  ["muted", "muted-foreground"],
+  ["accent", "accent-foreground"],
+  ["destructive", null],
+  ["border", null],
+  ["input", null],
+  ["ring", null],
+];
+
+const CHART_VARS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"];
+
+const SIDEBAR_PAIRS: Array<[string, string | null]> = [
+  ["sidebar", "sidebar-foreground"],
+  ["sidebar-primary", "sidebar-primary-foreground"],
+  ["sidebar-accent", "sidebar-accent-foreground"],
+  ["sidebar-border", null],
+  ["sidebar-ring", null],
+];
+
+const RADII = ["xs", "sm", "md", "lg", "xl"];
+
+/** Raw brand ramps from palette.css. Semantic tokens above are built from these. */
+const PALETTES = [
+  "desert-sand",
+  "rosy-granite",
+  "faded-copper",
+  "dark-coffee",
+  "alabaster-grey",
+  "charcoal",
+  "raw-umber",
+  "cool-steel",
+  "dark-walnut",
+  "dim-grey",
+];
+const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+
+const TYPE_SCALE = ["text-xs", "text-sm", "text-base", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl"];
+
+// ---------- page ----------
+
+export default function DesignPage() {
+  const [dark, setDark] = useTheme();
+  const [accent, setAccent] = useAccent();
+  const dep = `${dark}:${accent}`;
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <div>
+            <h1 className="text-lg font-semibold">Campus Walk design system</h1>
+            <p className="text-sm text-muted-foreground">
+              Tokens and components. Edit <code className="font-mono">src/index.css</code> and watch this
+              page.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select
+              value={accent}
+              onValueChange={(v) => setAccent(v as AccentId)}
+              items={Object.fromEntries(ACCENTS.map((a) => [a.id, a.label]))}
+            >
+              <SelectTrigger size="sm" className="w-36" aria-label="Accent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACCENTS.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => setDark(!dark)}>
+              {dark ? <SunIcon /> : <MoonIcon />}
+              {dark ? "Light" : "Dark"}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto flex max-w-5xl flex-col gap-12 px-4 py-8">
+        <Section title="Palette" hint="Brand ramps from palette.css. Hover a step for its hex. These do not change with mode.">
+          <div className="flex flex-col gap-3">
+            {PALETTES.map((name) => (
+              <Ramp key={name} name={name} />
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Colors" hint="Semantic tokens. Each tile paints the token as background with its paired foreground on top.">
+          <SwatchGrid pairs={COLOR_PAIRS} dep={dep} />
+        </Section>
+
+        <Section title="Charts">
+          <div className="grid grid-cols-5 gap-3">
+            {CHART_VARS.map((v) => (
+              <Swatch key={v} bg={v} fg={null} dep={dep} />
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Sidebar">
+          <SwatchGrid pairs={SIDEBAR_PAIRS} dep={dep} />
+        </Section>
+
+        <Section title="Radius" hint="All sizes derive from --radius.">
+          <RadiusRow dep={dep} />
+        </Section>
+
+        <Section title="Typography">
+          <div className="flex flex-col gap-2">
+            {TYPE_SCALE.map((cls) => (
+              <div key={cls} className="flex items-baseline gap-4">
+                <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">{cls}</span>
+                <span className={cls}>Campus Walk Assessment</span>
+              </div>
+            ))}
+            <div className="flex items-baseline gap-4">
+              <span className="w-20 shrink-0 font-mono text-xs text-muted-foreground">mono</span>
+              <span className="font-mono text-sm">BLDG-014 · 2026-10-20T14:32 · score 87/100</span>
+            </div>
+          </div>
+        </Section>
+
+        <Separator />
+
+        <Section title="Button">
+          <Row label="variant">
+            <Button>Default</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="destructive">Destructive</Button>
+            <Button variant="link">Link</Button>
+          </Row>
+          <Row label="size">
+            <Button size="xs">Extra small</Button>
+            <Button size="sm">Small</Button>
+            <Button>Default</Button>
+            <Button size="lg">Large</Button>
+            <Button size="icon" aria-label="Icon">
+              <SunIcon />
+            </Button>
+          </Row>
+          <Row label="state">
+            <Button disabled>Disabled</Button>
+            <Button variant="outline" disabled>
+              Disabled
+            </Button>
+          </Row>
+        </Section>
+
+        <Section title="Badge">
+          <Row label="variant">
+            <Badge>Default</Badge>
+            <Badge variant="secondary">Secondary</Badge>
+            <Badge variant="outline">Outline</Badge>
+            <Badge variant="destructive">Destructive</Badge>
+            <Badge variant="ghost">Ghost</Badge>
+            <Badge variant="link">Link</Badge>
+          </Row>
+        </Section>
+
+        <Section title="Form controls">
+          <div className="grid max-w-xl gap-5">
+            <div className="grid gap-2">
+              <Label htmlFor="d-name">Building name</Label>
+              <Input id="d-name" placeholder="e.g. Science Hall" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="d-invalid">Invalid field</Label>
+              <Input id="d-invalid" aria-invalid defaultValue="bad value" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="d-notes">Notes</Label>
+              <Textarea id="d-notes" placeholder="Observations…" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Condition</Label>
+              <Select defaultValue="Pass">
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pass">Pass</SelectItem>
+                  <SelectItem value="Fail">Fail</SelectItem>
+                  <SelectItem value="Not applicable">Not applicable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox id="d-check" defaultChecked />
+              <Label htmlFor="d-check">Photo attached</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="d-switch" />
+              <Label htmlFor="d-switch">Flag for follow-up</Label>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Card">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Science Hall</CardTitle>
+                <CardDescription>Last walked 3 days ago</CardDescription>
+              </CardHeader>
+              <CardContent className="text-sm">
+                <p>14 items assessed, 2 flagged for follow-up.</p>
+              </CardContent>
+              <CardFooter className="gap-2">
+                <Badge variant="secondary">In progress</Badge>
+                <Button size="sm" className="ml-auto">
+                  Open
+                </Button>
+              </CardFooter>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Empty state</CardTitle>
+                <CardDescription>No assessments yet for this building.</CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Button variant="outline" size="sm">
+                  Start a walk
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </Section>
+
+        <Section title="Tabs">
+          <Tabs defaultValue="exterior">
+            <TabsList>
+              <TabsTrigger value="exterior">Exterior</TabsTrigger>
+              <TabsTrigger value="interior">Interior</TabsTrigger>
+              <TabsTrigger value="grounds">Grounds</TabsTrigger>
+            </TabsList>
+            <TabsContent value="exterior" className="text-sm text-muted-foreground">
+              Exterior checklist items appear here.
+            </TabsContent>
+            <TabsContent value="interior" className="text-sm text-muted-foreground">
+              Interior checklist items appear here.
+            </TabsContent>
+            <TabsContent value="grounds" className="text-sm text-muted-foreground">
+              Grounds checklist items appear here.
+            </TabsContent>
+          </Tabs>
+        </Section>
+
+        <Section title="Overlays" hint="Dialog for tasks, AlertDialog for destructive confirmation.">
+          <Row label="">
+            <Dialog>
+              <DialogTrigger render={<Button variant="outline" />}>Open dialog</DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add a note</DialogTitle>
+                  <DialogDescription>Notes are attached to the current checklist item.</DialogDescription>
+                </DialogHeader>
+                <Textarea placeholder="Type here…" />
+                <DialogFooter>
+                  <Button>Save</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="destructive" />}>Delete walk</AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this walk?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes all 14 assessed items and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </Row>
+        </Section>
+      </main>
+    </div>
+  );
+}
+
+// ---------- building blocks ----------
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-base font-semibold">{title}</h2>
+        {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      {label && <span className="w-16 shrink-0 font-mono text-xs text-muted-foreground">{label}</span>}
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function SwatchGrid({ pairs, dep }: { pairs: Array<[string, string | null]>; dep: unknown }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {pairs.map(([bg, fg]) => (
+        <Swatch key={bg} bg={bg} fg={fg} dep={dep} />
+      ))}
+    </div>
+  );
+}
+
+function Swatch({ bg, fg, dep }: { bg: string; fg: string | null; dep: unknown }) {
+  const bgValue = useCssVar(`--${bg}`, dep);
+  const fgValue = useCssVar(fg ? `--${fg}` : "--foreground", dep);
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <div
+        className="flex h-20 flex-col justify-end p-2 text-xs"
+        style={{ background: `var(--${bg})`, color: fg ? `var(--${fg})` : undefined }}
+      >
+        {fg ? <span className="font-medium">Aa</span> : null}
+      </div>
+      <div className="flex flex-col gap-0.5 p-2 font-mono text-[11px] leading-tight">
+        <span>--{bg}</span>
+        <span className="text-muted-foreground">{bgValue}</span>
+        {fg && (
+          <>
+            <span className="mt-1">--{fg}</span>
+            <span className="text-muted-foreground">{fgValue}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Ramp({ name }: { name: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-28 shrink-0 font-mono text-xs text-muted-foreground">{name}</span>
+      <div className="flex flex-1 overflow-hidden rounded-md border">
+        {STEPS.map((step) => (
+          <div
+            key={step}
+            title={`--color-${name}-${step}`}
+            className="flex h-10 flex-1 items-end justify-center pb-1 font-mono text-[10px]"
+            style={{
+              background: `var(--color-${name}-${step})`,
+              color: step >= 500 ? `var(--color-${name}-50)` : `var(--color-${name}-900)`,
+            }}
+          >
+            {step}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RadiusRow({ dep }: { dep: unknown }) {
+  const base = useCssVar("--radius", dep);
+  return (
+    <div className="flex flex-wrap items-end gap-6">
+      <div className="flex flex-col items-center gap-1">
+        <div className="size-16 border-2 border-primary" style={{ borderRadius: "var(--radius)" }} />
+        <span className="font-mono text-[11px] text-muted-foreground">--radius {base}</span>
+      </div>
+      {RADII.map((r) => (
+        <div key={r} className="flex flex-col items-center gap-1">
+          <div className={`size-16 border-2 border-primary rounded-${r}`} />
+          <span className="font-mono text-[11px] text-muted-foreground">rounded-{r}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
