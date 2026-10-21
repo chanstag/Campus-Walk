@@ -44,6 +44,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Icons, type LucideIcon } from "@/components/icons";
 
 /**
  * Living style guide. Renders every token and component so edits to
@@ -246,6 +247,42 @@ export default function DesignPage() {
           </div>
         </Section>
 
+        <Section
+          title="Icons"
+          hint="Semantic vocabulary from components/icons.ts. App code imports Icons.room, never a Lucide name."
+        >
+          <div className="flex flex-col gap-5">
+            {iconGroups().map(([group, entries]) => (
+              <div key={group} className="flex flex-col gap-2">
+                <span className="font-mono text-xs text-muted-foreground">{group}</span>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                  {entries.map(([name, Icon]) => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-2 rounded-md border bg-card px-2 py-1.5 text-xs"
+                    >
+                      <Icon className="size-4 shrink-0 text-foreground" />
+                      <span className="truncate font-mono">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="font-mono text-xs text-muted-foreground">condition, as it should ship: icon + color + label</span>
+            <div className="flex flex-wrap gap-2">
+              <ConditionChip icon={Icons.condition.good} label="Good" className="text-green-700 dark:text-green-400" />
+              <ConditionChip icon={Icons.condition.fair} label="Fair" className="text-amber-700 dark:text-amber-400" />
+              <ConditionChip icon={Icons.condition.poor} label="Poor" className="text-destructive" />
+              <ConditionChip icon={Icons.condition.notApplicable} label="N/A" className="text-muted-foreground" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Colors above are Tailwind defaults as placeholders. Replace with status tokens once defined.
+            </p>
+          </div>
+        </Section>
+
         <Separator />
 
         <Section title="Button">
@@ -412,6 +449,31 @@ export default function DesignPage() {
 }
 
 // ---------- building blocks ----------
+
+type IconEntry = [string, LucideIcon];
+
+/** Flattens the Icons object into [group, [name, Icon][]] for display. */
+function iconGroups(): Array<[string, IconEntry[]]> {
+  const top: IconEntry[] = [];
+  const nested: Array<[string, IconEntry[]]> = [];
+  for (const [key, value] of Object.entries(Icons)) {
+    if (typeof value === "function" || "$$typeof" in (value as object)) {
+      top.push([key, value as LucideIcon]);
+    } else {
+      nested.push([key, Object.entries(value as Record<string, LucideIcon>)]);
+    }
+  }
+  return [["core", top], ...nested];
+}
+
+function ConditionChip({ icon: Icon, label, className }: { icon: LucideIcon; label: string; className: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs font-medium ${className}`}>
+      <Icon className="size-4" />
+      {label}
+    </span>
+  );
+}
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
