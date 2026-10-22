@@ -3,9 +3,11 @@ import { sql } from "drizzle-orm";
 import { assetRouter } from "./routers/asset.js";
 import { assetTypeRouter } from "./routers/assetType.js";
 import { campusRouter } from "./routers/campus.js";
+import { officeRouter } from "./routers/office.js";
+import { roomRouter } from "./routers/room.js";
 import { publicProcedure, router } from "./trpc.js";
 
-// One sub-router per level of the hierarchy. building/floor/room routers slot in here when needed.
+// One sub-router per level of the hierarchy. building/floor routers slot in here when needed.
 export const appRouter = router({
   health: publicProcedure.query(async ({ ctx }) => {
     await ctx.db.execute(sql`select 1`);
@@ -13,8 +15,11 @@ export const appRouter = router({
   }),
 
   campus: campusRouter,
+  room: roomRouter,
   asset: assetRouter,
   assetType: assetTypeRouter,
+  /** View-specific aggregates for the office summary page. */
+  office: officeRouter,
 });
 
 export type AppRouter = typeof appRouter;
