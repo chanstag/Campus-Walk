@@ -44,6 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Icons, type LucideIcon } from "@/components/icons";
+import { Logo, LOGO_COLORS } from "@/components/logo";
 import { ACCENTS, useAccent, type AccentId } from "@/hooks/use-accent";
 import { useTheme as useAppTheme } from "@/hooks/use-theme";
 import TypeCompare from "./TypeCompare";
@@ -134,12 +135,15 @@ export default function DesignPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-lg font-semibold">Campus Walk design system</h1>
+          <div className="flex items-center gap-3">
+            <Logo className="size-9" />
+            <div>
+              <h1 className="text-lg font-semibold">Campus Walk design system</h1>
             <p className="text-sm text-muted-foreground">
               Tokens and components. Edit <code className="font-mono">src/index.css</code> and watch this
               page.
             </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Select
@@ -167,6 +171,42 @@ export default function DesignPage() {
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-12 px-4 py-8">
+        <Section
+          title="Logo"
+          hint="src/assets/campus-walk-logo.svg, rendered through components/logo.tsx. Fixed colors; it does not follow mode or accent, so check it on every surface."
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <LogoSurface label="background" className="bg-background text-foreground" />
+            <LogoSurface label="sidebar" className="bg-sidebar text-sidebar-foreground" />
+            <LogoSurface label="card" className="bg-card text-card-foreground" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="font-mono text-xs text-muted-foreground">lockup, as it ships in the sidebar and on sign-in</span>
+            <div className="flex flex-wrap items-center gap-6">
+              <span className="flex items-center gap-2">
+                <Logo className="size-7" />
+                <span className="font-semibold">Campus Walk</span>
+              </span>
+              <span className="flex items-center gap-2 text-sm">
+                <Logo className="size-5" />
+                <span className="font-semibold">Campus Walk</span>
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {LOGO_COLORS.map((c) => (
+              <div key={c.hex} className="overflow-hidden rounded-lg border">
+                <div className="h-12" style={{ background: c.hex }} />
+                <div className="flex flex-col gap-0.5 p-2 font-mono text-[11px] leading-tight">
+                  <span>{c.name}</span>
+                  <span className="text-muted-foreground">{c.hex}</span>
+                  <span className="text-muted-foreground">{c.note}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
         <Section title="Palette" hint="Brand ramps from palette.css. Hover a step for its hex. These do not change with mode.">
           <div className="flex flex-col gap-3">
             {PALETTES.map((name) => (
@@ -416,6 +456,21 @@ function iconGroups(): Array<[string, IconEntry[]]> {
     }
   }
   return [["core", top], ...nested];
+}
+
+/** The mark at the sizes the app uses, on one themed surface. */
+function LogoSurface({ label, className }: { label: string; className: string }) {
+  return (
+    <div className={`flex flex-col gap-2 rounded-lg border p-3 ${className}`}>
+      <div className="flex items-end gap-4">
+        <Logo className="size-5" />
+        <Logo className="size-7" />
+        <Logo className="size-10" />
+        <Logo className="size-16" />
+      </div>
+      <span className="font-mono text-[11px] text-muted-foreground">{label} · 20 / 28 / 40 / 64 px</span>
+    </div>
+  );
 }
 
 function ConditionChip({ icon: Icon, label, className }: { icon: LucideIcon; label: string; className: string }) {

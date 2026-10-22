@@ -1,4 +1,5 @@
 import { Icons } from "@/components/icons";
+import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -37,7 +38,7 @@ export function PageShell({
       <SidebarProvider style={{ "--sidebar-width": "19rem" } as React.CSSProperties}>
         <Sidebar>
           <SidebarHeader className="flex-row items-center gap-2 px-4 py-3">
-            <Icons.walk className="size-5" />
+            <Logo className="size-7" />
             <span className="font-semibold">Campus Walk</span>
           </SidebarHeader>
           <SidebarContent>
