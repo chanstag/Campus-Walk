@@ -125,3 +125,22 @@
   --color-dim-grey-900: #1b1a18;
   --color-dim-grey-950: #131211;
 }
+
+/*
+ * Candidate ramp, not from the brand imagery. A low-chroma green for the
+ * "second color" accent experiment (index.css [data-accent="sage"]). Delete
+ * if the experiment loses; promote into the brand set if it wins.
+ */
+@theme static {
+  --color-sage-50: #f3f6f3;
+  --color-sage-100: #e3eae4;
+  --color-sage-200: #c6d5c8;
+  --color-sage-300: #a7bfab;
+  --color-sage-400: #86a68c;
+  --color-sage-500: #688d6f;
+  --color-sage-600: #527059;
+  --color-sage-700: #3e5444;
+  --color-sage-800: #2a392e;
+  --color-sage-900: #161e18;
+  --color-sage-950: #0e130f;
+}

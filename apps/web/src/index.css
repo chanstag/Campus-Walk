@@ -9,6 +9,9 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
+    --color-condition-good: var(--condition-good);
+    --color-condition-fair: var(--condition-fair);
+    --color-condition-poor: var(--condition-poor);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -66,8 +69,8 @@
     --accent: var(--color-faded-copper-100);
     --accent-foreground: var(--color-rosy-granite-900);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: var(--color-alabaster-grey-200);
-    --input: var(--color-alabaster-grey-200);
+    --border: var(--color-alabaster-grey-300);
+    --input: var(--color-alabaster-grey-300);
     --ring: var(--color-dark-coffee-500);
     --chart-1: var(--color-dark-coffee-600);
     --chart-2: var(--color-desert-sand-400);
@@ -79,10 +82,15 @@
     --sidebar-foreground: var(--color-rosy-granite-900);
     --sidebar-primary: var(--color-dark-coffee-600);
     --sidebar-primary-foreground: var(--color-desert-sand-50);
-    --sidebar-accent: var(--color-desert-sand-100);
+    --sidebar-accent: var(--color-desert-sand-200);
     --sidebar-accent-foreground: var(--color-rosy-granite-900);
-    --sidebar-border: var(--color-alabaster-grey-200);
+    --sidebar-border: var(--color-alabaster-grey-300);
     --sidebar-ring: var(--color-dark-coffee-500);
+    /* Condition status. The brand ramps have no green or red, so good/poor are
+       muted oklch hues tuned to sit with the warm palette; fair reuses raw umber. */
+    --condition-good: oklch(0.55 0.11 150);
+    --condition-fair: var(--color-raw-umber-600);
+    --condition-poor: oklch(0.55 0.19 27);
 }
 
 .dark {
@@ -102,7 +110,7 @@
     --accent: var(--color-rosy-granite-800);
     --accent-foreground: var(--color-desert-sand-50);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: var(--color-rosy-granite-800);
+    --border: var(--color-rosy-granite-700);
     --input: var(--color-rosy-granite-700);
     --ring: var(--color-dark-coffee-400);
     --chart-1: var(--color-dark-coffee-400);
@@ -114,10 +122,13 @@
     --sidebar-foreground: var(--color-desert-sand-50);
     --sidebar-primary: var(--color-dark-coffee-400);
     --sidebar-primary-foreground: var(--color-rosy-granite-950);
-    --sidebar-accent: var(--color-rosy-granite-800);
+    --sidebar-accent: var(--color-rosy-granite-700);
     --sidebar-accent-foreground: var(--color-desert-sand-50);
-    --sidebar-border: var(--color-rosy-granite-800);
+    --sidebar-border: var(--color-rosy-granite-700);
     --sidebar-ring: var(--color-dark-coffee-400);
+    --condition-good: oklch(0.74 0.11 150);
+    --condition-fair: var(--color-raw-umber-400);
+    --condition-poor: oklch(0.72 0.17 25);
 }
 
 /*
@@ -152,6 +163,48 @@
     --chart-1: var(--color-dark-walnut-400);
     --sidebar-primary: var(--color-dark-walnut-400);
     --sidebar-ring: var(--color-dark-walnut-400);
+}
+
+/*
+ * "Second color" experiments: primary stays dark coffee; a cool hue takes the
+ * "where you are" roles (ring, active sidebar row, selected card, hover tint,
+ * chart-2). Condition colors are untouched so green keeps meaning "good".
+ */
+:root[data-accent="cool-steel"] {
+    --ring: var(--color-cool-steel-600);
+    --accent: var(--color-cool-steel-200);
+    --accent-foreground: var(--color-cool-steel-900);
+    --chart-2: var(--color-cool-steel-500);
+    --sidebar-ring: var(--color-cool-steel-600);
+    --sidebar-accent: var(--color-cool-steel-200);
+    --sidebar-accent-foreground: var(--color-cool-steel-900);
+}
+.dark[data-accent="cool-steel"] {
+    --ring: var(--color-cool-steel-400);
+    --accent: var(--color-cool-steel-800);
+    --accent-foreground: var(--color-cool-steel-100);
+    --chart-2: var(--color-cool-steel-400);
+    --sidebar-ring: var(--color-cool-steel-400);
+    --sidebar-accent: var(--color-cool-steel-700);
+    --sidebar-accent-foreground: var(--color-cool-steel-50);
+}
+:root[data-accent="sage"] {
+    --ring: var(--color-sage-600);
+    --accent: var(--color-sage-200);
+    --accent-foreground: var(--color-sage-900);
+    --chart-2: var(--color-sage-500);
+    --sidebar-ring: var(--color-sage-600);
+    --sidebar-accent: var(--color-sage-200);
+    --sidebar-accent-foreground: var(--color-sage-900);
+}
+.dark[data-accent="sage"] {
+    --ring: var(--color-sage-400);
+    --accent: var(--color-sage-800);
+    --accent-foreground: var(--color-sage-100);
+    --chart-2: var(--color-sage-400);
+    --sidebar-ring: var(--color-sage-400);
+    --sidebar-accent: var(--color-sage-700);
+    --sidebar-accent-foreground: var(--color-sage-50);
 }
 
 @layer base {

@@ -1,5 +1,4 @@
-import { MoonIcon, SunIcon } from "lucide-react";
-import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +44,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Icons, type LucideIcon } from "@/components/icons";
+import { ACCENTS, useAccent, type AccentId } from "@/hooks/use-accent";
+import { useTheme as useAppTheme } from "@/hooks/use-theme";
 import TypeCompare from "./TypeCompare";
 
 /**
@@ -55,58 +56,14 @@ import TypeCompare from "./TypeCompare";
 
 // ---------- theme ----------
 
-const THEME_KEY = "campus-walk:theme";
-
+/** Adapter over the app-wide theme so the rest of this page keeps its boolean. */
 function useTheme() {
-  const [dark, setDark] = useState(() => {
-    try {
-      return localStorage.getItem(THEME_KEY) === "dark";
-    } catch {
-      return false;
-    }
-  });
-  // Layout effect: child <Swatch> effects run before this parent's effects,
-  // so a plain useEffect would let them read the previous mode's values.
-  useLayoutEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    try {
-      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
-    } catch {
-      /* storage unavailable */
-    }
-  }, [dark]);
+  const { theme, setTheme } = useAppTheme();
+  const dark = theme === "dark";
+  const setDark = (d: boolean) => setTheme(d ? "dark" : "light");
   return [dark, setDark] as const;
 }
 
-const ACCENT_KEY = "campus-walk:accent";
-/** Accent candidates. Each non-default value has a [data-accent] override block in index.css. */
-const ACCENTS = [
-  { id: "default", label: "Dark coffee" },
-  { id: "raw-umber", label: "Raw umber" },
-  { id: "dark-walnut", label: "Dark walnut" },
-] as const;
-type AccentId = (typeof ACCENTS)[number]["id"];
-
-function useAccent() {
-  const [accent, setAccent] = useState<AccentId>(() => {
-    try {
-      const v = localStorage.getItem(ACCENT_KEY);
-      return ACCENTS.some((a) => a.id === v) ? (v as AccentId) : "default";
-    } catch {
-      return "default";
-    }
-  });
-  useLayoutEffect(() => {
-    if (accent === "default") delete document.documentElement.dataset.accent;
-    else document.documentElement.dataset.accent = accent;
-    try {
-      localStorage.setItem(ACCENT_KEY, accent);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [accent]);
-  return [accent, setAccent] as const;
-}
 
 /** Reads the resolved value of a CSS custom property, re-reading when `dep` changes. */
 function useCssVar(name: string, dep: unknown) {
@@ -132,6 +89,9 @@ const COLOR_PAIRS: Array<[string, string | null]> = [
   ["border", null],
   ["input", null],
   ["ring", null],
+  ["condition-good", null],
+  ["condition-fair", null],
+  ["condition-poor", null],
 ];
 
 const CHART_VARS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"];
@@ -158,6 +118,7 @@ const PALETTES = [
   "cool-steel",
   "dark-walnut",
   "dim-grey",
+  "sage",
 ];
 const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 
@@ -198,7 +159,7 @@ export default function DesignPage() {
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" onClick={() => setDark(!dark)}>
-              {dark ? <SunIcon /> : <MoonIcon />}
+              {dark ? <Icons.theme.light /> : <Icons.theme.dark />}
               {dark ? "Light" : "Dark"}
             </Button>
           </div>
@@ -291,7 +252,7 @@ export default function DesignPage() {
             <Button>Default</Button>
             <Button size="lg">Large</Button>
             <Button size="icon" aria-label="Icon">
-              <SunIcon />
+              <Icons.theme.light />
             </Button>
           </Row>
           <Row label="state">

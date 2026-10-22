@@ -48,6 +48,7 @@ import {
   MapPin,
   Menu,
   Monitor,
+  Moon,
   NotebookPen,
   Package,
   Paperclip,
@@ -61,6 +62,7 @@ import {
   School,
   Search,
   Settings,
+  Sun,
   ShieldAlert,
   Thermometer,
   Trash,
@@ -149,5 +151,11 @@ export const Icons = {
     chevronRight: ChevronRight,
     chevronDown: ChevronDown,
     back: ChevronLeft,
+  },
+
+  // ---- Theme toggle. Shown as "switch to": light icon while dark, dark icon while light.
+  theme: {
+    light: Sun,
+    dark: Moon,
   },
 } as const;
