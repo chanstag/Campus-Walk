@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   CircleCheck,
   CircleMinus,
   CircleQuestionMark,
@@ -158,6 +159,7 @@ export const Icons = {
     menu: Menu,
     chevronRight: ChevronRight,
     chevronDown: ChevronDown,
+    expand: ChevronsUpDown,
     back: ChevronLeft,
   },
 

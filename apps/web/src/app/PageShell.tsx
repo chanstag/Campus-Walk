@@ -1,10 +1,10 @@
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { UserMenu } from "@/components/user-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppNav } from "./AppNav";
+import { NavUser } from "./NavUser";
 
 /**
  * Layout every page uses: brand + nav in the sidebar, an optional page-specific
- * sidebar slot below the nav (the walk tree), and a header with breadcrumbs.
+ * sidebar slot below the nav (the walk tree), the signed-in user at the bottom,
+ * and a header with breadcrumbs.
  */
 export function PageShell({
   sidebar,
@@ -47,6 +49,9 @@ export function PageShell({
               </>
             )}
           </SidebarContent>
+          <SidebarFooter>
+            <NavUser />
+          </SidebarFooter>
         </Sidebar>
 
         <SidebarInset className="min-h-svh">
@@ -65,7 +70,6 @@ export function PageShell({
               ))}
             </nav>
             <ThemeToggle className="ml-auto" />
-            <UserMenu />
           </header>
 
           <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
