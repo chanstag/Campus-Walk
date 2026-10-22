@@ -56,6 +56,27 @@ It fetches, creates the worktree off `origin/main`, copies `apps/api/.env`, crea
 
 **Gotchas.** Both dev servers bind fixed ports (API 3001, Vite 5173), so only one worktree can run `pnpm dev` at a time unless you set `PORT` and change the Vite proxy target. Neon's free plan caps branches per project; clean up finished features to free slots. A Neon branch is a snapshot of `main`'s data at creation time, so run `pnpm --filter api db:migrate` in the worktree after adding migrations. Before any `db:seed` or `db:migrate`, check which worktree you are in (`git rev-parse --show-toplevel`) and which `DATABASE_URL` its `.env` holds.
 
+## Git workflow: one worktree per feature
+
+Every feature, fix, or chore gets its own git worktree in a sibling directory, branched from `origin/main`, with its own Neon database branch. The main `Campus Walk/` checkout stays on `main` and is the place to run the worktree scripts from; do not develop features directly in it.
+
+**Layout.** Worktrees are siblings of the main repo, named `<repo>-<type>-<description>`: branch `feat/room-photos` lives in `../Campus Walk-feat-room-photos`. `git worktree list` from the main repo shows the exact paths on the current machine. Each worktree has its own `node_modules` and its own `apps/api/.env`, whose `DATABASE_URL` points at a Neon branch named after the git branch (`feat/room-photos`). Migrations, `db:seed`, and manual mutation testing inside a worktree therefore never touch the main database.
+
+**Branch naming.** `<type>/<short-description>` with `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`. Features merge to `main` through a PR with a squash merge. Never commit directly to `main`.
+
+**Starting work.** Use the `create-worktree` skill, which runs `.claude/scripts/create-worktree.sh` from the main repo:
+
+```bash
+.claude/scripts/create-worktree.sh feat room-photos          # branch feat/room-photos
+.claude/scripts/create-worktree.sh fix tree-sort --no-neon   # share main's DB (UI-only work)
+```
+
+It fetches, creates the worktree off `origin/main`, copies `apps/api/.env`, creates the Neon branch and rewrites `DATABASE_URL` (keeping `.env.bak`), and runs `pnpm install`. It does not push; `--push` is opt-in and asks first. Neon branch creation needs `neonctl` logged in (via `npx`, as in `pnpm db:setup`) and `jq`; the project is found by `NEON_PROJECT_ID` in `.env` or by name (`campus-walk`).
+
+**Finishing work.** Use the `cleanup-worktree` skill (`.claude/scripts/cleanup-worktree.sh <branch-or-dir>`) from the main repo. It removes the worktree, deletes the local branch, and deletes the Neon branch. It refuses the main repo, the current directory, `main`/`master`, and dirty or unmerged work without `--force`.
+
+**Gotchas.** Both dev servers bind fixed ports (API 3001, Vite 5173), so only one worktree can run `pnpm dev` at a time unless you set `PORT` and change the Vite proxy target. Neon's free plan caps branches per project; clean up finished features to free slots. A Neon branch is a snapshot of `main`'s data at creation time, so run `pnpm --filter api db:migrate` in the worktree after adding migrations. Before any `db:seed` or `db:migrate`, check which worktree you are in (`git rev-parse --show-toplevel`) and which `DATABASE_URL` its `.env` holds.
+
 ## Architecture
 
 **End-to-end typing via tRPC.** `apps/api/src/router.ts` exports `AppRouter`. The web app imports that type directly from the api workspace (`import type { AppRouter } from "api/src/router"` in `apps/web/src/trpc.ts`), so `api` is a `workspace:*` devDependency of `web`. Changing a procedure's input/output in the router is immediately reflected in web type errors. Never duplicate request/response types on the client.
