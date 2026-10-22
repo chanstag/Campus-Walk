@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { asset, room } from "../db/schema.js";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 import type { Context } from "../trpc.js";
 
 type AssetWithType = Awaited<ReturnType<typeof fetchAssets>>[number];
@@ -49,7 +49,7 @@ async function requireAsset(db: Context["db"], assetId: string) {
 }
 
 export const assetRouter = router({
-  byRoom: publicProcedure.input(z.object({ roomId: z.uuid() })).query(async ({ ctx, input }) => {
+  byRoom: protectedProcedure.input(z.object({ roomId: z.uuid() })).query(async ({ ctx, input }) => {
     const rows = await fetchAssets(ctx.db, eq(asset.roomId, input.roomId));
     return rows.sort(byTypeThenYear);
   }),
@@ -58,7 +58,7 @@ export const assetRouter = router({
    * Assets in a building that are not in any room: building systems (roof, HVAC, boiler)
    * and delivered-but-unplaced equipment. Split them on assetType.typicallyBuildingLevel.
    */
-  byBuilding: publicProcedure
+  byBuilding: protectedProcedure
     .input(z.object({ buildingId: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const rows = await fetchAssets(
@@ -69,7 +69,7 @@ export const assetRouter = router({
     }),
 
   /** Adds an asset to a room. Building is derived from the room. A condition given here counts as an assessment. */
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         roomId: z.uuid(),
@@ -103,7 +103,7 @@ export const assetRouter = router({
     }),
 
   /** Edits descriptive fields. Undefined fields are left alone; null clears. */
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         assetId: z.uuid(),
@@ -121,7 +121,7 @@ export const assetRouter = router({
     }),
 
   /** Records the current condition. assessed_by stays null until auth exists. */
-  assess: publicProcedure
+  assess: protectedProcedure
     .input(z.object({ assetId: z.uuid(), condition: condition.nullable(), notes: text(2000) }))
     .mutation(async ({ ctx, input }) => {
       await requireAsset(ctx.db, input.assetId);
@@ -137,7 +137,7 @@ export const assetRouter = router({
       return updated!;
     }),
 
-  remove: publicProcedure.input(z.object({ assetId: z.uuid() })).mutation(async ({ ctx, input }) => {
+  remove: protectedProcedure.input(z.object({ assetId: z.uuid() })).mutation(async ({ ctx, input }) => {
     const deleted = await ctx.db.delete(asset).where(eq(asset.id, input.assetId)).returning({ id: asset.id });
     if (deleted.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found" });
     return { id: input.assetId };

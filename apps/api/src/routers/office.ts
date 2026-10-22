@@ -1,7 +1,7 @@
 import { asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { asset, assetType, building, campus, floor, room } from "../db/schema.js";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 
 /**
  * Office summary. A view-specific router rather than a hierarchy level.
@@ -13,7 +13,7 @@ const poorItems = sql<number>`coalesce(sum(${asset.quantity}) filter (where ${as
 const unratedItems = sql<number>`coalesce(sum(${asset.quantity}) filter (where ${asset.condition} is null), 0)`.mapWith(Number);
 
 export const officeRouter = router({
-  summary: publicProcedure.query(async ({ ctx }) => {
+  summary: protectedProcedure.query(async ({ ctx }) => {
     const [campuses, rooms, byCategory] = await Promise.all([
       ctx.db
         .select({
@@ -69,7 +69,7 @@ export const officeRouter = router({
     });
   }),
 
-  campusDetail: publicProcedure.input(z.object({ campusId: z.uuid() })).query(async ({ ctx, input }) => {
+  campusDetail: protectedProcedure.input(z.object({ campusId: z.uuid() })).query(async ({ ctx, input }) => {
     const [itemsByType, poorAssets, roomsRemaining] = await Promise.all([
       ctx.db
         .select({

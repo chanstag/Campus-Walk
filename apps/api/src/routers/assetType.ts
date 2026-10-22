@@ -1,9 +1,9 @@
 import { asc } from "drizzle-orm";
 import { assetType } from "../db/schema.js";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 
 export const assetTypeRouter = router({
-  list: publicProcedure.query(({ ctx }) =>
+  list: protectedProcedure.query(({ ctx }) =>
     ctx.db.query.assetType.findMany({ orderBy: [asc(assetType.category), asc(assetType.name)] }),
   ),
 });

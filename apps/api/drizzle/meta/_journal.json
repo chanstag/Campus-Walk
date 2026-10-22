@@ -8,6 +8,13 @@
       "when": 1792549619742,
       "tag": "0000_dry_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792638872617,
+      "tag": "0001_jittery_power_man",
+      "breakpoints": true
     }
   ]
 }

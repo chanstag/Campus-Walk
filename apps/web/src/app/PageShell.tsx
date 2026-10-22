@@ -1,5 +1,6 @@
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -64,6 +65,7 @@ export function PageShell({
               ))}
             </nav>
             <ThemeToggle className="ml-auto" />
+            <UserMenu />
           </header>
 
           <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>

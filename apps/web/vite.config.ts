@@ -18,6 +18,11 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      // Better Auth endpoints live on the API too; same-origin so session cookies just work.
+      "/api/auth": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
     },
   },
 });
