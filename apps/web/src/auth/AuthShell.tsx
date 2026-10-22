@@ -1,4 +1,4 @@
-import { Icons } from "@/components/icons";
+import { Logo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /** Centered card for the signed-out pages (login, accept invitation). */
@@ -15,7 +15,7 @@ export function AuthShell({
     <main className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="flex w-full max-w-sm flex-col gap-4">
         <div className="flex items-center gap-2 px-1">
-          <Icons.walk className="size-5" />
+          <Logo className="size-7" />
           <span className="font-semibold">Campus Walk</span>
         </div>
         <Card>
