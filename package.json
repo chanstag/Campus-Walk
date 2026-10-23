@@ -5,9 +5,14 @@
   "scripts": {
     "dev": "pnpm -r --parallel --stream dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p e2e",
     "db:setup": "node scripts/setup-neon.mjs",
-    "db:seed": "pnpm --filter api db:seed"
+    "db:seed": "pnpm --filter api db:seed",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "db:setup:test": "bash scripts/setup-test-db.sh"
   },
   "engines": {
     "node": ">=20"
@@ -20,5 +25,11 @@
     "overrides": {
       "@types/react": "^19.3.0"
     }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "@types/node": "^26.6.5"
   }
 }

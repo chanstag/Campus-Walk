@@ -16,8 +16,10 @@ pnpm workspace (`apps/*`). Node >= 20, pnpm 10. Run from this directory unless n
 pnpm install
 pnpm db:setup                    # one-time Neon provisioning; writes apps/api/.env (idempotent)
 pnpm dev                         # API http://localhost:3001 + web http://localhost:5173, in parallel
-pnpm typecheck                   # tsc --noEmit in both apps
+pnpm typecheck                   # tsc --noEmit in both apps and e2e/
 pnpm build                       # web: tsc + vite build; api: tsc to dist/
+pnpm test                        # Vitest: api router tests (test DB) + web unit tests; see Testing
+pnpm test:e2e                    # Playwright against the test DB on its own ports; see Testing
 
 pnpm --filter api dev            # one app only (likewise --filter web)
 pnpm --filter api db:generate    # drizzle-kit: migration from src/db/schema.ts into apps/api/drizzle/
@@ -25,36 +27,45 @@ pnpm --filter api db:migrate
 pnpm --filter api db:studio
 pnpm db:seed                     # TRUNCATES the campus tables (not users), then loads sample_data/campus_walk_sample_data
 pnpm --filter api auth:create-admin --email you@x.com --name "You" --password '...'   # first admin; everyone else is invited
+pnpm db:setup:test               # one-time: Neon branch "test" → apps/api/.env.test, then migrate + seed it
 ```
 
-Manual verification of mutations writes to the dev Neon database; `pnpm db:seed` puts it back to the sample.
+Manual verification of mutations writes to the dev Neon database; `pnpm db:seed` puts it back to the sample. Automated tests never touch it (see Testing).
 
-There is no test runner or linter configured yet. `pnpm typecheck` is the only verification step.
+There is no linter configured. Verification is `pnpm typecheck`, `pnpm test` and `pnpm test:e2e`.
 
 The API port is 3001 (not 3000) because 3000 is taken by another service on the dev machine. The Vite dev server proxies `/trpc` and `/api/auth` to 3001, so the browser always talks to one origin and session cookies are first-party.
 
 `apps/api/.env` needs `DATABASE_URL`, `BETTER_AUTH_SECRET` (`openssl rand -base64 32`), `APP_URL` (web origin, default `http://localhost:5173`) and `API_URL` (default `http://localhost:3001`); see `.env.example`. `src/env.ts` validates them at startup.
 
-## Git workflow: one worktree per feature
+## Testing
 
-Every feature, fix, or chore gets its own git worktree in a sibling directory, branched from `origin/main`, with its own Neon database branch. The main `Campus Walk/` checkout stays on `main` and is the place to run the worktree scripts from; do not develop features directly in it.
-
-**Layout.** Worktrees are siblings of the main repo, named `<repo>-<type>-<description>`: branch `feat/room-photos` lives in `../Campus Walk-feat-room-photos`. `git worktree list` from the main repo shows the exact paths on the current machine. Each worktree has its own `node_modules` and its own `apps/api/.env`, whose `DATABASE_URL` points at a Neon branch named after the git branch (`feat/room-photos`). Migrations, `db:seed`, and manual mutation testing inside a worktree therefore never touch the main database.
-
-**Branch naming.** `<type>/<short-description>` with `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`. Features merge to `main` through a PR with a squash merge. Never commit directly to `main`.
-
-**Starting work.** Use the `create-worktree` skill, which runs `.claude/scripts/create-worktree.sh` from the main repo:
+Two layers, and every feature ships with both.
 
 ```bash
-.claude/scripts/create-worktree.sh feat room-photos          # branch feat/room-photos
-.claude/scripts/create-worktree.sh fix tree-sort --no-neon   # share main's DB (UI-only work)
+pnpm db:setup:test                  # one-time: creates Neon branch "test", writes apps/api/.env.test, migrates + seeds it
+pnpm exec playwright install chromium   # one-time
+pnpm test                           # Vitest, both apps (~10 s; each api file reseeds)
+pnpm test:watch
+pnpm test:e2e                       # Playwright; starts API on 3101 + Vite on 5174 itself, coexists with pnpm dev
+pnpm test:e2e:ui
+pnpm --filter api db:migrate:test   # after adding a migration
+pnpm --filter api db:seed:test      # reset the test branch by hand
 ```
 
-It fetches, creates the worktree off `origin/main`, copies `apps/api/.env`, creates the Neon branch and rewrites `DATABASE_URL` (keeping `.env.bak`), and runs `pnpm install`. It does not push; `--push` is opt-in and asks first. Neon branch creation needs `neonctl` logged in (via `npx`, as in `pnpm db:setup`) and `jq`; the project is found by `NEON_PROJECT_ID` in `.env` or by name (`campus-walk`).
+**The rule for new work.** A feature adds or extends one Playwright spec, `e2e/<feature>.spec.ts` (walk and office changes extend `walk-*.spec.ts` / `office.spec.ts`), plus Vitest tests for every new tRPC procedure (colocated `apps/api/src/routers/<name>.test.ts`) and for new pure logic (colocated `*.test.ts`). No React Testing Library: component behaviour is proven in the browser.
 
-**Finishing work.** Use the `cleanup-worktree` skill (`.claude/scripts/cleanup-worktree.sh <branch-or-dir>`) from the main repo. It removes the worktree, deletes the local branch, and deletes the Neon branch. It refuses the main repo, the current directory, `main`/`master`, and dirty or unmerged work without `--force`.
+**Database.** Both suites use the Neon `test` branch named in `apps/api/.env.test` (git-ignored; `.env.test.example` shows the shape), never `.env`. Three guards: `apps/api/vitest.config.ts` refuses to start if `.env.test` is missing, lacks `CAMPUS_WALK_TEST=1`, or has the same `DATABASE_URL` as `.env`; `src/test/seed.ts` refuses without that marker; `scripts/setup-test-db.sh` refuses to write a URL equal to the dev one. Isolation is reseed-per-file: `reseed()` in `beforeAll` (Vitest) or `test.beforeAll` (Playwright specs that write). There is no per-test rollback (the Neon HTTP driver has no transactions) and a reseed costs 1–3 s, so tests within a file share state and look rows up by room number or asset tag (`findRoomByNumber`, `findAssetByTag`, `findAssetType` in `src/test/db.ts`), never by sample id. The test seed also creates two fixed accounts (`src/test/users.ts`: an admin and a field user); the sample truncate leaves users alone.
 
-**Gotchas.** Both dev servers bind fixed ports (API 3001, Vite 5173), so only one worktree can run `pnpm dev` at a time unless you set `PORT` and change the Vite proxy target. Neon's free plan caps branches per project; clean up finished features to free slots. A Neon branch is a snapshot of `main`'s data at creation time, so run `pnpm --filter api db:migrate` in the worktree after adding migrations. Before any `db:seed` or `db:migrate`, check which worktree you are in (`git rev-parse --show-toplevel`) and which `DATABASE_URL` its `.env` holds.
+**API tests** (`apps/api/src/routers/*.test.ts`) call procedures in-process through `appRouter.createCaller` with a hand-built session: `callerFor("admin" | "field")`, or `anonymousCaller()` to assert UNAUTHORIZED. No HTTP, no cookies. `users.*` is not covered this way because it round-trips through Better Auth with the caller's headers. Vitest runs api files one at a time (`fileParallelism: false`).
+
+**Web tests** are pure functions and stores only (`src/lib/condition.test.ts`, `src/hooks/use-*.test.ts`). `environment: node` by default; add `// @vitest-environment jsdom` per file when `localStorage` or `document` is needed. Module-level stores are re-imported per test with `vi.resetModules()` + dynamic `import()`.
+
+**E2E** (`e2e/`, root `playwright.config.ts`) runs Chromium against the real stack on its own ports (API 3101 via the api `dev:test` script, which loads `.env.test`; Vite 5174 via the web `dev:test` script; `API_PORT` drives the Vite proxy target). One worker. `e2e/setup.ts` reseeds and signs in through the login page once, saving the cookies to `e2e/.auth/admin.json` for every spec. Helpers in `e2e/fixtures.ts`: `openRoom`, `assetCard`, `treeRoom`, `reseed`, and `SAMPLE` targets (room 101: walked, 7 rated assets; P101 in Portable P-1: unwalked, all unrated). Prefer `getByRole` / `getByLabel`; add `data-testid` only when there is no accessible name.
+
+**CI** (`.github/workflows/ci.yml`) needs the secrets `TEST_DATABASE_URL` (the `test` branch) and `TEST_BETTER_AUTH_SECRET`, and serialises runs with a concurrency group because they share that branch.
+
+`apps/api/tsconfig.json` excludes tests from `build`; its `typecheck` uses `tsconfig.test.json`. Root `typecheck` also checks `e2e/`.
 
 ## Git workflow: one worktree per feature
 
@@ -63,6 +74,8 @@ Every feature, fix, or chore gets its own git worktree in a sibling directory, b
 **Layout.** Worktrees are siblings of the main repo, named `<repo>-<type>-<description>`: branch `feat/room-photos` lives in `../Campus Walk-feat-room-photos`. `git worktree list` from the main repo shows the exact paths on the current machine. Each worktree has its own `node_modules` and its own `apps/api/.env`, whose `DATABASE_URL` points at a Neon branch named after the git branch (`feat/room-photos`). Migrations, `db:seed`, and manual mutation testing inside a worktree therefore never touch the main database.
 
 **Branch naming.** `<type>/<short-description>` with `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`. Features merge to `main` through a PR with a squash merge. Never commit directly to `main`.
+
+**Rebase, never merge, to update a branch.** Bring a branch up to date with `git fetch origin && git rebase origin/main`. Never `git merge main` into a feature branch, and never create merge commits on a branch. After rebasing a branch that is already pushed, push with `git push --force-with-lease` (never plain `--force`).
 
 **Starting work.** Use the `create-worktree` skill, which runs `.claude/scripts/create-worktree.sh` from the main repo:
 

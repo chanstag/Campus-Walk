@@ -5,13 +5,15 @@
 //
 //   pnpm --filter api db:seed            # or `pnpm db:seed` from the repo root
 //   SEED_DIR=/path/to/csvs pnpm --filter api db:seed
+//
+// Also exported as `seed(db)` for the test database (src/test/seed.ts).
 
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { sql } from "drizzle-orm";
-import { db } from "./client.js";
+import { db, type Db } from "./client.js";
 import { asset, assetType, building, campus, district, floor, room } from "./schema.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -21,8 +23,8 @@ const SEED_DIR =
 // ---------- csv ----------
 
 /** Minimal RFC 4180 reader: quoted fields, escaped quotes, CRLF. Returns rows as objects keyed by header. */
-function readCsv(name: string): Record<string, string>[] {
-  const text = readFileSync(resolve(SEED_DIR, name), "utf8");
+function readCsv(dir: string, name: string): Record<string, string>[] {
+  const text = readFileSync(resolve(dir, name), "utf8");
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -83,24 +85,28 @@ class IdMap {
   }
 }
 
-async function insertChunked<T>(table: Parameters<typeof db.insert>[0], rows: T[], size = 200) {
+async function insertChunked<T>(db: Db, table: Parameters<Db["insert"]>[0], rows: T[], size = 200) {
   for (let i = 0; i < rows.length; i += size) {
     await db.insert(table).values(rows.slice(i, i + size) as never);
   }
 }
 
-// ---------- main ----------
+// ---------- seed ----------
 
-async function main() {
-  console.log(`[db:seed] reading ${SEED_DIR}`);
-  const campuses = readCsv("campuses.csv");
-  const buildings = readCsv("buildings.csv");
-  const floors = readCsv("floors.csv");
-  const rooms = readCsv("rooms.csv");
-  const assetTypes = readCsv("asset_types.csv");
-  const assets = readCsv("assets.csv");
+/**
+ * Truncates the campus tables (not users) and loads the sample CSVs from `dir`.
+ * Pass a `log` to see progress; the test helper passes a no-op.
+ */
+export async function seed(db: Db, { dir = SEED_DIR, log = console.log }: { dir?: string; log?: (line: string) => void } = {}) {
+  log(`[db:seed] reading ${dir}`);
+  const campuses = readCsv(dir, "campuses.csv");
+  const buildings = readCsv(dir, "buildings.csv");
+  const floors = readCsv(dir, "floors.csv");
+  const rooms = readCsv(dir, "rooms.csv");
+  const assetTypes = readCsv(dir, "asset_types.csv");
+  const assets = readCsv(dir, "assets.csv");
 
-  console.log("[db:seed] truncating");
+  log("[db:seed] truncating");
   await db.execute(
     sql`truncate table asset, asset_type, room, floor, building, campus, district restart identity cascade`,
   );
@@ -149,6 +155,7 @@ async function main() {
 
   const roomIds = new IdMap("room");
   await insertChunked(
+    db,
     room,
     rooms.map((r) => ({
       id: roomIds.add(r.room_id!),
@@ -175,6 +182,7 @@ async function main() {
   );
 
   await insertChunked(
+    db,
     asset,
     assets.map((a) => ({
       assetTypeId: typeIds.get(a.asset_type_id!),
@@ -202,10 +210,13 @@ async function main() {
     union all select 'asset_type', count(*)::int from asset_type
     union all select 'asset', count(*)::int from asset
   `);
-  for (const { t, n } of counts.rows) console.log(`[db:seed] ${t.padEnd(10)} ${n}`);
+  for (const { t, n } of counts.rows) log(`[db:seed] ${t.padEnd(10)} ${n}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Run when executed directly (`pnpm db:seed`); importing the module does nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seed(db).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
