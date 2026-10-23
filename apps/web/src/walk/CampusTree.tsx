@@ -344,7 +344,7 @@ function useAssetDrop(target: AssetLocation) {
   const selection = useSelection();
   const from = selection.assetLocation;
   const { can: canMove } = useCan("asset", "update");
-  const move = useMoveAsset(selection.campusId ?? "", from ?? { roomId: "" });
+  const move = useMoveAsset();
   const [over, setOver] = useState(false);
   const accepts = (e: React.DragEvent) => canMove && !!from && !sameLocation(from, target) && isAssetDrag(e);
 

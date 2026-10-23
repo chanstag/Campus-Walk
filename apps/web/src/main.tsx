@@ -1,7 +1,6 @@
-import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TRPCClientError } from "@trpc/client";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { NuqsAdapter } from "nuqs/adapters/react-router/v8";
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { PageShell } from "./app/PageShell";
@@ -13,41 +12,43 @@ import DesignPage from "./design/DesignPage";
 import { initAccent } from "./hooks/use-accent";
 import { initTheme } from "./hooks/use-theme";
 import "./index.css";
+import { queryClient, trpcClient } from "./offline/client";
+import {
+  CACHE_BUSTER,
+  CACHE_MAX_AGE,
+  makePersister,
+  shouldPersistMutation,
+  shouldPersistQuery,
+} from "./offline/persist";
 import { OfficePage } from "./office/OfficePage";
 import { PermissionsPage } from "./permissions/PermissionsPage";
-import { makeTRPCClient, TRPCProvider } from "./trpc";
+import { TRPCProvider } from "./trpc";
 import { UsersPage } from "./users/UsersPage";
 import { WalkPage } from "./walk/WalkPage";
 
 initTheme();
 initAccent();
 
-function isUnauthorized(err: unknown) {
-  return err instanceof TRPCClientError && err.data?.code === "UNAUTHORIZED";
-}
-
-function makeQueryClient() {
-  return new QueryClient({
-    // A session that expires mid-visit shows up as UNAUTHORIZED on the next query; go sign in.
-    queryCache: new QueryCache({
-      onError: (err) => {
-        if (isUnauthorized(err) && window.location.pathname !== "/login") window.location.assign("/login");
-      },
-    }),
-    defaultOptions: {
-      queries: { retry: (count, err) => !isUnauthorized(err) && count < 3 },
-    },
-  });
-}
+/**
+ * The walk screen's reads and any unsynced writes are kept in IndexedDB. On load the cache is
+ * restored first, then queued writes replay (see `offline/outbox.ts`).
+ */
+const persistOptions = {
+  persister: makePersister(),
+  maxAge: CACHE_MAX_AGE,
+  buster: CACHE_BUSTER,
+  dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery, shouldDehydrateMutation: shouldPersistMutation },
+};
 
 function Root() {
-  const [queryClient] = useState(makeQueryClient);
-  const [trpcClient] = useState(() => makeTRPCClient());
-
   return (
     <BrowserRouter>
       <NuqsAdapter>
-        <QueryClientProvider client={queryClient}>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={persistOptions}
+          onSuccess={() => queryClient.resumePausedMutations()}
+        >
           <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -83,7 +84,7 @@ function Root() {
               />
             </Routes>
           </TRPCProvider>
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </NuqsAdapter>
     </BrowserRouter>
   );

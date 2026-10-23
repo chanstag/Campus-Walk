@@ -1,7 +1,10 @@
+import { count, eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
+import { asset, building } from "../db/schema.js";
 import {
   anonymousCaller,
   callerFor,
+  db,
   findAssetByTag,
   findAssetType,
   findRoomByNumber,
@@ -60,6 +63,40 @@ describe("asset.create", () => {
     await expect(caller.asset.create({ roomId: crypto.randomUUID(), assetTypeId: type.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("uses a client id, and a replay with the same id returns the row instead of inserting twice", async () => {
+    const target = await findRoomByNumber("102");
+    const type = await findAssetType("Projector");
+    const id = crypto.randomUUID();
+    const ratedAt = new Date(Date.now() - 60_000);
+    const first = await caller.asset.create({ id, roomId: target.id, assetTypeId: type.id, condition: 4, assessedAt: ratedAt });
+    expect(first.id).toBe(id);
+    expect(first.assessedAt).toEqual(ratedAt);
+
+    const replay = await caller.asset.create({ id, roomId: target.id, assetTypeId: type.id, condition: 4, assessedAt: ratedAt });
+    expect(replay.id).toBe(id);
+    const inRoom = await caller.asset.byRoom({ roomId: target.id });
+    expect(inRoom.filter((a) => a.id === id)).toHaveLength(1);
+  });
+});
+
+describe("asset.byCampus", () => {
+  it("returns every asset in the campus, in rooms and at building level, and nothing from other campuses", async () => {
+    const r101 = await findRoomByNumber("101");
+    const main = await db.query.building.findFirst({ where: eq(building.id, r101.floor.buildingId) });
+    const rows = await caller.asset.byCampus({ campusId: main!.campusId });
+
+    const inRoom = await caller.asset.byRoom({ roomId: r101.id });
+    const ids = new Set(rows.map((a) => a.id));
+    expect(inRoom.every((a) => ids.has(a.id))).toBe(true);
+
+    const campusBuildings = await db.query.building.findMany({ where: eq(building.campusId, main!.campusId) });
+    const buildingIds = new Set(campusBuildings.map((b) => b.id));
+    expect(rows.every((a) => buildingIds.has(a.buildingId))).toBe(true);
+
+    const total = await db.select({ n: count() }).from(asset).where(inArray(asset.buildingId, [...buildingIds]));
+    expect(rows).toHaveLength(total[0]!.n);
   });
 });
 
@@ -143,6 +180,27 @@ describe("asset.assess", () => {
   it("rejects an out-of-range condition", async () => {
     const tagged = await findAssetByTag("CR-1004");
     await expect(caller.asset.assess({ assetId: tagged.id, condition: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("keeps the newest tap: a late replay with an older assessedAt is ignored", async () => {
+    const tagged = await findAssetByTag("CR-1004");
+    const now = Date.now();
+    const newer = await caller.asset.assess({ assetId: tagged.id, condition: 5, assessedAt: new Date(now - 60_000) });
+    expect(newer.assessedAt).toEqual(new Date(now - 60_000));
+
+    const stale = await caller.asset.assess({ assetId: tagged.id, condition: 1, notes: "old", assessedAt: new Date(now - 120_000) });
+    expect(stale.condition).toBe(5);
+    expect(stale.notes).not.toBe("old");
+    expect(stale.assessedAt).toEqual(new Date(now - 60_000));
+
+    const later = await caller.asset.assess({ assetId: tagged.id, condition: 2, assessedAt: new Date(now - 30_000) });
+    expect(later.condition).toBe(2);
+  });
+
+  it("clamps an assessedAt from a clock running ahead to now", async () => {
+    const tagged = await findAssetByTag("CR-1004");
+    const rated = await caller.asset.assess({ assetId: tagged.id, condition: 3, assessedAt: new Date(Date.now() + 3_600_000) });
+    expect(rated.assessedAt!.getTime()).toBeLessThanOrEqual(Date.now());
   });
 });
 

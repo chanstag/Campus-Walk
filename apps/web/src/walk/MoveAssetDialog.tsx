@@ -12,7 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTRPC } from "@/trpc";
-import { locationInput, useMoveAsset } from "./mutations";
+import { locationInput, submitWrite, useMoveAsset } from "./mutations";
 import { type AssetLocation, type AssetWithType, isRoomLocation } from "./types";
 
 /** Select values: a room or a building's building level, kept distinct in one list. */
@@ -41,7 +41,7 @@ export function MoveAssetDialog({
 }) {
   const trpc = useTRPC();
   const tree = useQuery(trpc.campus.tree.queryOptions({ campusId }));
-  const move = useMoveAsset(campusId, from);
+  const move = useMoveAsset();
   const [target, setTarget] = useState<string | null>(null);
   const current = encode(from);
 
@@ -64,7 +64,7 @@ export function MoveAssetDialog({
 
   async function submit() {
     if (!target) return;
-    await move.mutateAsync({ assetId: asset.id, ...locationInput(decode(target)) });
+    await submitWrite(move, { assetId: asset.id, ...locationInput(decode(target)) });
     onOpenChange(false);
   }
 

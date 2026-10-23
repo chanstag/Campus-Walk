@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Icons } from "@/components/icons";
 import { CONDITION_OPTIONS } from "@/lib/condition";
-import { useFinishRoom } from "./mutations";
+import { submitWrite, useFinishRoom } from "./mutations";
 import type { Room } from "./types";
 
 const NONE = "__none__";
@@ -22,24 +22,27 @@ const NONE = "__none__";
 export function FinishRoomDialog({
   open,
   onOpenChange,
-  campusId,
   room,
   unratedCount,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  campusId: string;
   room: Room;
   unratedCount: number;
 }) {
-  const finish = useFinishRoom(campusId, room.id);
+  const finish = useFinishRoom();
   const [condition, setCondition] = useState(room.condition == null ? NONE : String(room.condition));
   const [notes, setNotes] = useState(room.notes ?? "");
   const finished = room.assessedAt != null;
   const labels = { [NONE]: "Not rated", ...Object.fromEntries(CONDITION_OPTIONS.map((o) => [String(o.value), o.label])) };
 
   async function submit() {
-    await finish.mutateAsync({ roomId: room.id, condition: condition === NONE ? null : Number(condition), notes });
+    await submitWrite(finish, {
+      roomId: room.id,
+      condition: condition === NONE ? null : Number(condition),
+      notes,
+      assessedAt: new Date(),
+    });
     onOpenChange(false);
   }
 

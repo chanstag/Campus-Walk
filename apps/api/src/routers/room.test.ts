@@ -54,6 +54,18 @@ describe("room.finish", () => {
     await expect(caller.room.finish({ roomId: target.id, condition: 6 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
+  it("stores the client's assessedAt and ignores a late replay older than the stored finish", async () => {
+    // Room 101 was walked when the sample was recorded, well before now.
+    const target = await findRoomByNumber("101");
+    const now = Date.now();
+    const recent = await caller.room.finish({ roomId: target.id, condition: 4, assessedAt: new Date(now - 60_000) });
+    expect(recent.room.assessedAt).toEqual(new Date(now - 60_000));
+
+    const stale = await caller.room.finish({ roomId: target.id, condition: 1, assessedAt: new Date(now - 120_000) });
+    expect(stale.room.condition).toBe(4);
+    expect(stale.room.assessedAt).toEqual(new Date(now - 60_000));
+  });
+
   it("throws NOT_FOUND for an unknown room", async () => {
     await expect(caller.room.finish({ roomId: crypto.randomUUID() })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
