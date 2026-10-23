@@ -306,7 +306,7 @@ function AssetCard({
       // Not while the note editor is open: a draggable ancestor swallows text selection in the textarea.
       draggable={canUpdate && !notingOpen}
       onDragStart={(e) => {
-        startAssetDrag(e, asset.id);
+        startAssetDrag(e, asset.id, e.currentTarget);
         setDragging(true);
       }}
       onDragEnd={() => setDragging(false)}
