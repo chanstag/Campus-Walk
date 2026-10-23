@@ -5,6 +5,7 @@ import { assetPhotoRouter } from "./routers/assetPhoto.js";
 import { assetTypeRouter } from "./routers/assetType.js";
 import { buildingRouter } from "./routers/building.js";
 import { campusRouter } from "./routers/campus.js";
+import { districtRouter } from "./routers/district.js";
 import { floorRouter } from "./routers/floor.js";
 import { inviteRouter } from "./routers/invite.js";
 import { officeRouter } from "./routers/office.js";
@@ -20,6 +21,7 @@ export const appRouter = router({
     return { db: "ok" as const, at: new Date().toISOString() };
   }),
 
+  district: districtRouter,
   campus: campusRouter,
   building: buildingRouter,
   floor: floorRouter,
