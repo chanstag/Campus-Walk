@@ -21,13 +21,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { ConditionBadge, ConditionPicker } from "@/lib/condition";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
 import { AssetDialog } from "./AssetDialog";
 import { FinishRoomDialog } from "./FinishRoomDialog";
 import { RoomDialog } from "./RoomDialog";
-import { useAssessAsset, useRemoveAsset } from "./mutations";
+import { useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
 import type { AssetWithType, Room } from "./types";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -224,6 +225,7 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
   const assess = useAssessAsset(campusId, roomId);
   const remove = useRemoveAsset(campusId, roomId);
   const [editing, setEditing] = useState(false);
+  const [notingOpen, setNotingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const detail = [asset.manufacturer, asset.model].filter(Boolean).join(" ");
   const rated = asset.condition != null;
@@ -280,14 +282,25 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
         {detail && <span>{detail}</span>}
         {asset.installYear != null && <span>Installed {asset.installYear}</span>}
       </p>
-      {asset.notes && <p className="text-sm">{asset.notes}</p>}
+      {notingOpen ? (
+        <NoteEditor campusId={campusId} roomId={roomId} asset={asset} onDone={() => setNotingOpen(false)} />
+      ) : (
+        asset.notes && <p className="text-sm whitespace-pre-line">{asset.notes}</p>
+      )}
 
-      <ConditionPicker
-        className="mt-auto self-start"
-        value={asset.condition}
-        disabled={assess.isPending || !canAssess}
-        onChange={(condition) => assess.mutate({ assetId: asset.id, condition })}
-      />
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
+        <ConditionPicker
+          value={asset.condition}
+          disabled={assess.isPending || !canAssess}
+          onChange={(condition) => assess.mutate({ assetId: asset.id, condition })}
+        />
+        {canUpdate && !notingOpen && (
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setNotingOpen(true)}>
+            <Icons.note />
+            {asset.notes ? "Edit note" : "Add note"}
+          </Button>
+        )}
+      </div>
       {assess.error && <p className="text-xs text-destructive">{assess.error.message}</p>}
 
       {editing && <AssetDialog open onOpenChange={setEditing} campusId={campusId} roomId={roomId} asset={asset} />}
@@ -309,6 +322,54 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
         </AlertDialogContent>
       </AlertDialog>
     </article>
+  );
+}
+
+/** Inline note editing on the card, so a quick observation doesn't need the full edit dialog. */
+function NoteEditor({
+  campusId,
+  roomId,
+  asset,
+  onDone,
+}: {
+  campusId: string;
+  roomId: string;
+  asset: AssetWithType;
+  onDone: () => void;
+}) {
+  const update = useUpdateAsset(campusId, roomId);
+  const [notes, setNotes] = useState(asset.notes ?? "");
+  const unchanged = notes.trim() === (asset.notes ?? "");
+  const save = () => {
+    if (unchanged) return onDone();
+    update.mutate({ assetId: asset.id, notes: notes.trim() }, { onSuccess: onDone });
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Textarea
+        autoFocus
+        rows={2}
+        placeholder="Observations…"
+        aria-label={`Note for ${asset.assetType.name}`}
+        value={notes}
+        disabled={update.isPending}
+        onChange={(e) => setNotes(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+          if (e.key === "Escape") onDone();
+        }}
+      />
+      {update.error && <p className="text-xs text-destructive">{update.error.message}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="xs" onClick={onDone} disabled={update.isPending}>
+          Cancel
+        </Button>
+        <Button size="xs" onClick={save} disabled={update.isPending}>
+          {update.isPending ? "Saving…" : "Save note"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
