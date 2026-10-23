@@ -108,7 +108,7 @@ export async function seed(db: Db, { dir = SEED_DIR, log = console.log }: { dir?
 
   log("[db:seed] truncating");
   await db.execute(
-    sql`truncate table asset, asset_type, room, floor, building, campus, district restart identity cascade`,
+    sql`truncate table asset_photo, asset, asset_type, room, floor, building, campus, district restart identity cascade`,
   );
 
   // District is implied by campuses.csv (one id, no name there); the JSON names it.

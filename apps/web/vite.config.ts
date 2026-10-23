@@ -28,6 +28,11 @@ export default defineConfig({
         target: api,
         changeOrigin: true,
       },
+      // Photo bytes (signed blob-store URLs) are served by the API as well.
+      "/files": {
+        target: api,
+        changeOrigin: true,
+      },
     },
   },
 });

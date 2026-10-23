@@ -1,5 +1,7 @@
 // Server env. Loaded by `import "dotenv/config"` in the entrypoints; validated here once so
 // a missing key fails at startup with a message instead of deep inside Better Auth.
+import { fileURLToPath } from "node:url";
+
 function required(key: string, hint: string): string {
   const value = process.env[key];
   if (!value) throw new Error(`${key} is not set. ${hint}`);
@@ -15,4 +17,11 @@ export const env = {
     "BETTER_AUTH_SECRET",
     "Add a random 32+ char string to apps/api/.env (e.g. `openssl rand -base64 32`).",
   ),
+  /**
+   * Root directory of the local blob store (photos). Defaults to apps/api/storage, or
+   * apps/api/storage-test under the test marker so test runs never touch dev files.
+   */
+  STORAGE_DIR:
+    process.env.STORAGE_DIR ||
+    fileURLToPath(new URL(process.env.CAMPUS_WALK_TEST === "1" ? "../storage-test" : "../storage", import.meta.url)),
 };

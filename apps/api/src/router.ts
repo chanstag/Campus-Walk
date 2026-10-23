@@ -1,6 +1,7 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import { sql } from "drizzle-orm";
 import { assetRouter } from "./routers/asset.js";
+import { assetPhotoRouter } from "./routers/assetPhoto.js";
 import { assetTypeRouter } from "./routers/assetType.js";
 import { campusRouter } from "./routers/campus.js";
 import { inviteRouter } from "./routers/invite.js";
@@ -20,6 +21,8 @@ export const appRouter = router({
   campus: campusRouter,
   room: roomRouter,
   asset: assetRouter,
+  /** Photos on an asset: signed upload/download URLs over the blob store. */
+  assetPhoto: assetPhotoRouter,
   assetType: assetTypeRouter,
   /** View-specific aggregates for the office summary page. */
   office: officeRouter,
