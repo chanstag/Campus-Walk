@@ -1,6 +1,7 @@
 // Seeds the permission catalog and default grants. Idempotent and safe to re-run:
-//   pnpm --filter api db:seed:permissions            # add new catalog pairs, drop stale ones,
-//                                                    # give defaults to roles that have no grants yet
+//   pnpm --filter api db:seed:permissions            # add new catalog pairs (granted to roles whose
+//                                                    # defaults include them), drop stale ones, give
+//                                                    # defaults to roles that have no grants yet
 //   pnpm --filter api db:seed:permissions -- --reset # also restore every role to its defaults
 // Separate from seed.ts (campus sample data) on purpose: that one truncates, this one upserts.
 import "dotenv/config";
@@ -21,6 +22,11 @@ export async function seedPermissions(db: Db, opts: { reset?: boolean } = {}) {
     .insert(role)
     .values(ROLES.map((name) => ({ name, label: ROLE_LABELS[name] })))
     .onConflictDoUpdate({ target: role.name, set: { label: sql`excluded.label` } });
+
+  // Pairs not yet in the table are new to the catalog: no role can have had them revoked, so
+  // roles that already have grants still get them if their defaults include them.
+  const before = new Set((await db.select().from(permission)).map((p) => `${p.resource}:${p.action}`));
+  const added = PERMISSION_KEYS.filter((key) => !before.has(key));
 
   await db
     .insert(permission)
@@ -52,19 +58,27 @@ export async function seedPermissions(db: Db, opts: { reset?: boolean } = {}) {
     .from(rolePermission)
     .groupBy(rolePermission.roleName);
   const defaulted: string[] = [];
+  const extended: string[] = [];
   for (const name of ROLES) {
     const has = counts.find((c) => c.roleName === name)?.n ?? 0;
-    if (has > 0 && !opts.reset) continue;
-    if (opts.reset) await db.delete(rolePermission).where(eq(rolePermission.roleName, name));
-    const keys = DEFAULT_GRANTS[name] === "all" ? PERMISSION_KEYS : DEFAULT_GRANTS[name];
+    const defaults = DEFAULT_GRANTS[name] === "all" ? PERMISSION_KEYS : DEFAULT_GRANTS[name];
+    let keys: PermissionKey[];
+    if (has > 0 && !opts.reset) {
+      keys = defaults.filter((key) => added.includes(key));
+      if (keys.length === 0) continue;
+      extended.push(name);
+    } else {
+      if (opts.reset) await db.delete(rolePermission).where(eq(rolePermission.roleName, name));
+      keys = defaults;
+      defaulted.push(name);
+    }
     await db
       .insert(rolePermission)
       .values(keys.map((key) => ({ roleName: name, permissionId: idByKey.get(key)! })))
       .onConflictDoNothing();
-    defaulted.push(name);
   }
 
-  return { permissions: PERMISSION_KEYS.length, removed: stale.length, defaulted };
+  return { permissions: PERMISSION_KEYS.length, added: added.length, removed: stale.length, defaulted, extended };
 }
 
 const runDirectly = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
@@ -72,8 +86,8 @@ if (runDirectly) {
   const { db } = await import("./client.js");
   const result = await seedPermissions(db, { reset: process.argv.includes("--reset") });
   console.log(
-    `Permissions: ${result.permissions} in catalog, ${result.removed} stale removed; defaults applied to: ${
+    `Permissions: ${result.permissions} in catalog, ${result.added} new, ${result.removed} stale removed; defaults applied to: ${
       result.defaulted.join(", ") || "none (all roles already have grants)"
-    }`,
+    }; new pairs granted to: ${result.extended.join(", ") || "none"}`,
   );
 }

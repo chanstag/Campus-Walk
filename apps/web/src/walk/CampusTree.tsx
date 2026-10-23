@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useCan } from "@/auth/permissions";
 import { Icons } from "@/components/icons";
 import {
   Collapsible,
@@ -19,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useTRPC } from "@/trpc";
+import { RoomDialog } from "./RoomDialog";
 import type { Building, Floor } from "./types";
 import { walkedCount } from "./types";
 import { useSelection } from "./useSelection";
@@ -148,6 +150,8 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const isCurrent = floor.id === floorId;
   const [open, setOpen] = useState(isCurrent);
+  const [adding, setAdding] = useState(false);
+  const { can: canCreateRoom } = useCan("room", "create");
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -198,9 +202,34 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             ))}
+            {canCreateRoom && (
+              <SidebarMenuSubItem>
+                <SidebarMenuSubButton
+                  render={<button type="button" />}
+                  className="w-full text-left text-muted-foreground"
+                  size="sm"
+                  onClick={() => setAdding(true)}
+                >
+                  <Icons.ui.add />
+                  <span>Add room</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            )}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuSubItem>
+      {adding && (
+        <RoomDialog
+          open
+          onOpenChange={setAdding}
+          campusId={campusId}
+          floor={floor}
+          onCreated={(r) => {
+            selectRoom(campusId, r.floorId, r.id);
+            if (isMobile) setOpenMobile(false);
+          }}
+        />
+      )}
     </Collapsible>
   );
 }
