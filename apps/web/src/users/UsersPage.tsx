@@ -4,6 +4,7 @@ import type { RouterOutputs } from "api/src/router";
 import { useState } from "react";
 import { PageShell } from "@/app/PageShell";
 import { useSession } from "@/auth-client";
+import { useCan } from "@/auth/permissions";
 import { Icons } from "@/components/icons";
 import {
   AlertDialog,
@@ -50,6 +51,9 @@ export function UsersPage() {
   const qc = useQueryClient();
   const { data: session } = useSession();
   const myId = session?.user.id;
+  const { can: canInvite } = useCan("user", "invite");
+  const { can: canUpdate } = useCan("user", "update");
+  const { can: canDelete } = useCan("user", "delete");
 
   const list = useQuery(trpc.users.list.queryOptions());
   const invalidate = () => qc.invalidateQueries(trpc.users.list.pathFilter());
@@ -78,7 +82,9 @@ export function UsersPage() {
   return (
     <PageShell crumbs={["Users"]} placeholder="Users">
       <div className="flex max-w-5xl flex-col gap-8">
-        <InviteCard pending={invite.isPending} error={invite.error?.message} onInvite={(v) => invite.mutate(v)} />
+        {canInvite && (
+          <InviteCard pending={invite.isPending} error={invite.error?.message} onInvite={(v) => invite.mutate(v)} />
+        )}
 
         <section className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">Users</h2>
@@ -109,7 +115,7 @@ export function UsersPage() {
                       <TableCell>
                         <RoleSelect
                           value={u.role}
-                          disabled={me || setRole.isPending}
+                          disabled={me || !canUpdate || setRole.isPending}
                           onChange={(role) => setRole.mutate({ userId: u.id, role })}
                         />
                       </TableCell>
@@ -123,35 +129,42 @@ export function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${u.name}`} disabled={me} />}
-                          >
-                            <Icons.ui.more />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setPasswordFor(u)}>
-                              <Icons.ui.password />
-                              Set temporary password
-                            </DropdownMenuItem>
-                            {u.banned ? (
-                              <DropdownMenuItem onClick={() => unban.mutate({ userId: u.id })}>
-                                <Icons.ui.confirm />
-                                Unban
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem onClick={() => ban.mutate({ userId: u.id })}>
-                                <Icons.ui.ban />
-                                Ban
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onClick={() => setRemoving(u)}>
-                              <Icons.ui.delete />
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(canUpdate || canDelete) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${u.name}`} disabled={me} />}
+                            >
+                              <Icons.ui.more />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canUpdate && (
+                                <DropdownMenuItem onClick={() => setPasswordFor(u)}>
+                                  <Icons.ui.password />
+                                  Set temporary password
+                                </DropdownMenuItem>
+                              )}
+                              {canUpdate &&
+                                (u.banned ? (
+                                  <DropdownMenuItem onClick={() => unban.mutate({ userId: u.id })}>
+                                    <Icons.ui.confirm />
+                                    Unban
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => ban.mutate({ userId: u.id })}>
+                                    <Icons.ui.ban />
+                                    Ban
+                                  </DropdownMenuItem>
+                                ))}
+                              {canUpdate && canDelete && <DropdownMenuSeparator />}
+                              {canDelete && (
+                                <DropdownMenuItem variant="destructive" onClick={() => setRemoving(u)}>
+                                  <Icons.ui.delete />
+                                  Remove
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -189,6 +202,7 @@ export function UsersPage() {
                         {expired ? <Badge variant="destructive">Expired</Badge> : inv.expiresAt.toLocaleDateString()}
                       </TableCell>
                       <TableCell>
+                        {canInvite && (
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${inv.email}`} />}
@@ -214,6 +228,7 @@ export function UsersPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

@@ -5,6 +5,7 @@ import { assetTypeRouter } from "./routers/assetType.js";
 import { campusRouter } from "./routers/campus.js";
 import { inviteRouter } from "./routers/invite.js";
 import { officeRouter } from "./routers/office.js";
+import { permissionsRouter } from "./routers/permissions.js";
 import { roomRouter } from "./routers/room.js";
 import { usersRouter } from "./routers/users.js";
 import { protectedProcedure, router } from "./trpc.js";
@@ -26,6 +27,8 @@ export const appRouter = router({
   users: usersRouter,
   /** Public: accept an invitation (the invitee has no session yet). */
   invite: inviteRouter,
+  /** Role × permission matrix (read/edit) and the caller's own permissions. */
+  permissions: permissionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useCan } from "@/auth/permissions";
 import { Icons, type LucideIcon } from "@/components/icons";
 import {
   AlertDialog,
@@ -42,6 +43,8 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
   const [adding, setAdding] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const unrated = assets.data?.filter((a) => a.condition == null).length ?? 0;
+  const { can: canCreate } = useCan("asset", "create");
+  const { can: canAssessRoom } = useCan("room", "assess");
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,6 +53,8 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
         onAdd={() => setAdding(true)}
         onFinish={() => setFinishing(true)}
         canFinish={!!assets.data}
+        showAdd={canCreate}
+        showFinish={canAssessRoom}
       />
       {assets.isPending && (
         <Grid>
@@ -62,10 +67,12 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
       {assets.data && assets.data.length === 0 && (
         <Empty icon={Icons.asset}>
           No assets recorded in this room yet.
-          <Button size="sm" className="mt-3" onClick={() => setAdding(true)}>
-            <Icons.ui.add />
-            Add the first asset
-          </Button>
+          {canCreate && (
+            <Button size="sm" className="mt-3" onClick={() => setAdding(true)}>
+              <Icons.ui.add />
+              Add the first asset
+            </Button>
+          )}
         </Empty>
       )}
       {assets.data && assets.data.length > 0 && (
@@ -85,11 +92,15 @@ function RoomHeader({
   onAdd,
   onFinish,
   canFinish,
+  showAdd,
+  showFinish,
 }: {
   room: Room;
   onAdd: () => void;
   onFinish: () => void;
   canFinish: boolean;
+  showAdd: boolean;
+  showFinish: boolean;
 }) {
   const finished = room.assessedAt != null;
   return (
@@ -104,14 +115,18 @@ function RoomHeader({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ConditionBadge rating={room.condition} />
-          <Button variant="outline" size="sm" onClick={onAdd}>
-            <Icons.ui.add />
-            Add asset
-          </Button>
-          <Button size="sm" variant={finished ? "secondary" : "default"} onClick={onFinish} disabled={!canFinish}>
-            {finished ? <Icons.ui.edit /> : <Icons.ui.confirm />}
-            {finished ? "Update room" : "Finish room"}
-          </Button>
+          {showAdd && (
+            <Button variant="outline" size="sm" onClick={onAdd}>
+              <Icons.ui.add />
+              Add asset
+            </Button>
+          )}
+          {showFinish && (
+            <Button size="sm" variant={finished ? "secondary" : "default"} onClick={onFinish} disabled={!canFinish}>
+              {finished ? <Icons.ui.edit /> : <Icons.ui.confirm />}
+              {finished ? "Update room" : "Finish room"}
+            </Button>
+          )}
         </div>
       </div>
       <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
@@ -196,6 +211,9 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
   const [confirmDelete, setConfirmDelete] = useState(false);
   const detail = [asset.manufacturer, asset.model].filter(Boolean).join(" ");
   const rated = asset.condition != null;
+  const { can: canUpdate } = useCan("asset", "update");
+  const { can: canDelete } = useCan("asset", "delete");
+  const { can: canAssess } = useCan("asset", "assess");
 
   return (
     <article
@@ -215,23 +233,29 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
           ) : (
             <Badge variant="secondary">Not rated</Badge>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-xs" aria-label="Asset actions" className="-mr-1" />}
-            >
-              <Icons.ui.more />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setEditing(true)}>
-                <Icons.ui.edit />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                <Icons.ui.delete />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(canUpdate || canDelete) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="ghost" size="icon-xs" aria-label="Asset actions" className="-mr-1" />}
+              >
+                <Icons.ui.more />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canUpdate && (
+                  <DropdownMenuItem onClick={() => setEditing(true)}>
+                    <Icons.ui.edit />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
+                    <Icons.ui.delete />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -245,7 +269,7 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
       <ConditionPicker
         className="mt-auto self-start"
         value={asset.condition}
-        disabled={assess.isPending}
+        disabled={assess.isPending || !canAssess}
         onChange={(condition) => assess.mutate({ assetId: asset.id, condition })}
       />
       {assess.error && <p className="text-xs text-destructive">{assess.error.message}</p>}

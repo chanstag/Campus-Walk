@@ -1,10 +1,12 @@
 import path from "node:path";
+import process from "node:process";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The API is on 3001 in dev; the Playwright run sets API_PORT so its own API (3101) is proxied.
-const api = `http://localhost:${process.env.API_PORT ?? 3001}`;
+// The API is on 3001 in dev. The Playwright run sets API_PORT for its own API (3101); another
+// worktree can point at a full URL with API_URL=http://localhost:3002.
+const api = process.env.API_URL ?? `http://localhost:${process.env.API_PORT ?? 3001}`;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
