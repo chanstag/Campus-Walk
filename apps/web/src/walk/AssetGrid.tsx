@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
 import { AssetDialog } from "./AssetDialog";
 import { FinishRoomDialog } from "./FinishRoomDialog";
+import { RoomDialog } from "./RoomDialog";
 import { useAssessAsset, useRemoveAsset } from "./mutations";
 import type { AssetWithType, Room } from "./types";
 
@@ -42,9 +43,11 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
   const assets = useQuery(trpc.asset.byRoom.queryOptions({ roomId: room.id }));
   const [adding, setAdding] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(false);
   const unrated = assets.data?.filter((a) => a.condition == null).length ?? 0;
   const { can: canCreate } = useCan("asset", "create");
   const { can: canAssessRoom } = useCan("room", "assess");
+  const { can: canUpdateRoom } = useCan("room", "update");
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,9 +55,11 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
         room={room}
         onAdd={() => setAdding(true)}
         onFinish={() => setFinishing(true)}
+        onEdit={() => setEditingRoom(true)}
         canFinish={!!assets.data}
         showAdd={canCreate}
         showFinish={canAssessRoom}
+        showEdit={canUpdateRoom}
       />
       {assets.isPending && (
         <Grid>
@@ -83,6 +88,7 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
       {finishing && (
         <FinishRoomDialog open onOpenChange={setFinishing} campusId={campusId} room={room} unratedCount={unrated} />
       )}
+      {editingRoom && <RoomDialog open onOpenChange={setEditingRoom} campusId={campusId} room={room} />}
     </div>
   );
 }
@@ -91,16 +97,20 @@ function RoomHeader({
   room,
   onAdd,
   onFinish,
+  onEdit,
   canFinish,
   showAdd,
   showFinish,
+  showEdit,
 }: {
   room: Room;
   onAdd: () => void;
   onFinish: () => void;
+  onEdit: () => void;
   canFinish: boolean;
   showAdd: boolean;
   showFinish: boolean;
+  showEdit: boolean;
 }) {
   const finished = room.assessedAt != null;
   return (
@@ -115,6 +125,12 @@ function RoomHeader({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ConditionBadge rating={room.condition} />
+          {showEdit && (
+            <Button variant="ghost" size="sm" onClick={onEdit}>
+              <Icons.ui.settings />
+              Edit details
+            </Button>
+          )}
           {showAdd && (
             <Button variant="outline" size="sm" onClick={onAdd}>
               <Icons.ui.add />
@@ -300,7 +316,7 @@ export function Empty({ icon: Icon, children }: { icon: LucideIcon; children: Re
   return (
     <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
       <Icon className="size-8" />
-      <div className="text-sm">{children}</div>
+      <div className="flex flex-col items-center text-sm">{children}</div>
     </div>
   );
 }

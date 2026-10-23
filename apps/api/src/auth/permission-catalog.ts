@@ -8,7 +8,7 @@ import type { Role } from "./roles.js";
 
 export const PERMISSIONS = {
   campus: ["read"],
-  room: ["read", "assess"],
+  room: ["read", "create", "update", "assess"],
   asset: ["read", "create", "update", "assess", "delete"],
   /** Office aggregates (`office.*` procedures). */
   summary: ["read"],
@@ -48,6 +48,8 @@ export function isPermissionKey(value: unknown): value is PermissionKey {
 export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   "campus:read": "Browse campuses, buildings, floors and rooms",
   "room:read": "See a room's details and assessment",
+  "room:create": "Add rooms to a floor",
+  "room:update": "Edit a room's number, name, type, area and capacity",
   "room:assess": "Finish a room (condition, notes, walked date)",
   "asset:read": "See the assets in a room or building",
   "asset:create": "Add assets",
@@ -69,6 +71,8 @@ export const DEFAULT_GRANTS: Record<Role, PermissionKey[] | "all"> = {
   office: [
     "campus:read",
     "room:read",
+    "room:create",
+    "room:update",
     "room:assess",
     "asset:read",
     "asset:create",
@@ -77,5 +81,5 @@ export const DEFAULT_GRANTS: Record<Role, PermissionKey[] | "all"> = {
     "asset:delete",
     "summary:read",
   ],
-  field: ["campus:read", "room:read", "room:assess", "asset:read", "asset:create", "asset:update", "asset:assess", "asset:delete"],
+  field: ["campus:read", "room:read", "room:create", "room:update", "room:assess", "asset:read", "asset:create", "asset:update", "asset:assess", "asset:delete"],
 };
