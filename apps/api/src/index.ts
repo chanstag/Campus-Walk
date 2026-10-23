@@ -11,7 +11,9 @@ import { createContext } from "./trpc.js";
 
 const port = Number(process.env.PORT ?? 3001);
 
-const server = Fastify({ logger: true });
+// tRPC batches put every procedure name in one path segment (`/trpc/a.b,a.b,…`); Fastify's
+// default 100-character limit turns a room's worth of photo lists into a 414.
+const server = Fastify({ logger: true, maxParamLength: 5000 });
 
 await server.register(cors, {
   origin: [env.APP_URL],
