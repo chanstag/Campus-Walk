@@ -8,7 +8,7 @@ test.describe("walk: navigation", () => {
     await expect(page.getByText("Select a campus in the tree.")).toBeVisible();
   });
 
-  test("selecting a room writes campus, floor and room into the URL; back walks up the tree", async ({ page }) => {
+  test("selecting a room writes campus, floor and room into the URL; back walks up through the floor and building", async ({ page }) => {
     await openRoom(page, SAMPLE.room101);
     await expect(page).toHaveURL(/\/walk\?campus=[^&]+&floor=[^&]+&room=[^&]+$/);
     await expect(page.getByRole("navigation", { name: "Location" })).toContainText("101 · Classroom 101");
@@ -16,6 +16,10 @@ test.describe("walk: navigation", () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/walk\?campus=[^&]+&floor=[^&]+$/);
     await expect(page.getByText("Pick a room to see its assets.")).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/walk\?campus=[^&]+&building=[^&]+$/);
+    await expect(page.getByRole("heading", { level: 2, name: SAMPLE.room101.building, exact: true })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/walk$/);

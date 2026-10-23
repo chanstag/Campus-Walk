@@ -25,9 +25,9 @@ import { BuildingDialog } from "./BuildingDialog";
 import { FloorDialog } from "./FloorDialog";
 import { RoomDialog } from "./RoomDialog";
 import { droppedAssetId, isAssetDrag } from "./drag";
-import { useMoveAsset } from "./mutations";
-import type { Building, Floor, Room } from "./types";
-import { walkedCount } from "./types";
+import { locationInput, useMoveAsset } from "./mutations";
+import type { AssetLocation, Building, Floor, Room } from "./types";
+import { sameLocation, walkedCount } from "./types";
 import { useSelection } from "./useSelection";
 
 /** Campus → building → floor → room. Expansion is local; selection is in the URL. */
@@ -199,6 +199,11 @@ function AddRow({ onClick, children }: { onClick: () => void; children: React.Re
   );
 }
 
+/**
+ * A building row. Clicking it selects the building (its own assets: building systems and
+ * unplaced equipment) and toggles its floors. Also a drop target that moves an asset card to
+ * the building level.
+ */
 function BuildingNode({
   campusId,
   building,
@@ -206,31 +211,50 @@ function BuildingNode({
   campusId: string;
   building: Building;
 }) {
-  const { floorId, selectFloor } = useSelection();
+  const { buildingId, floorId, selectBuilding, selectFloor } = useSelection();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const isCurrent = building.id === buildingId;
   const containsSelection = building.floors.some((f) => f.id === floorId);
-  const [open, setOpen] = useState(containsSelection);
+  const [open, setOpen] = useState(isCurrent || containsSelection);
   const springOpen = useSpringOpen(open, setOpen);
-  useExpandOnSelect(containsSelection, setOpen);
+  useExpandOnSelect(isCurrent || containsSelection, setOpen);
+  const drop = useAssetDrop({ buildingId: building.id });
   const [adding, setAdding] = useState(false);
   const { can: canCreateFloor } = useCan("floor", "create");
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    // The first click selects the building and keeps its floors showing; clicking it again toggles.
+    <Collapsible open={open} onOpenChange={(o) => setOpen(o || !isCurrent)}>
       <SidebarMenuSubItem>
         <CollapsibleTrigger
           render={
             <SidebarMenuSubButton
               render={<button type="button" />}
-              className="w-full text-left"
-              isActive={containsSelection}
-              {...springOpen}
+              className={cn("w-full text-left", drop.over && dropRing)}
+              isActive={isCurrent || containsSelection}
+              onClick={() => {
+                selectBuilding(campusId, building.id);
+                if (isMobile) setOpenMobile(false);
+              }}
+              onDragEnter={springOpen.onDragEnter}
+              onDragOver={drop.onDragOver}
+              onDragLeave={(e) => {
+                springOpen.onDragLeave(e);
+                drop.onDragLeave(e);
+              }}
+              onDrop={(e) => {
+                springOpen.onDrop();
+                drop.onDrop(e);
+              }}
             />
           }
         >
           <Icons.building />
-          <span className="truncate">{building.name}</span>
-          <Chevron />
+          <span className="min-w-0 flex-1 truncate">{building.name}</span>
+          {drop.move.isPending && <Icons.move className="size-3.5 shrink-0 animate-pulse text-muted-foreground" aria-label="Moving" />}
+          <Icons.ui.chevronRight className="transition-transform data-[panel-open]:rotate-90" />
         </CollapsibleTrigger>
+        <DropError move={drop.move} />
         <CollapsibleContent>
           <SidebarMenuSub className="mr-0 pr-0">
             {building.floors.map((f) => (
@@ -310,58 +334,82 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
   );
 }
 
-/** A room row. Also a drop target for asset cards dragged out of the selected room. */
+const dropRing = "bg-sidebar-accent ring-2 ring-sidebar-ring";
+
+/**
+ * Makes a tree row a drop target for asset cards. Drags only start in the asset list on screen,
+ * so the current selection is the source; dropping onto that same location does nothing.
+ */
+function useAssetDrop(target: AssetLocation) {
+  const selection = useSelection();
+  const from = selection.assetLocation;
+  const { can: canMove } = useCan("asset", "update");
+  const move = useMoveAsset(selection.campusId ?? "", from ?? { roomId: "" });
+  const [over, setOver] = useState(false);
+  const accepts = (e: React.DragEvent) => canMove && !!from && !sameLocation(from, target) && isAssetDrag(e);
+
+  return {
+    over,
+    move,
+    onDragOver: (e: React.DragEvent) => {
+      if (!accepts(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!staysInside(e)) setOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      setOver(false);
+      const assetId = droppedAssetId(e);
+      if (!accepts(e) || !assetId) return;
+      e.preventDefault();
+      move.mutate({ assetId, ...locationInput(target) });
+    },
+  };
+}
+
+function DropError({ move }: { move: ReturnType<typeof useMoveAsset> }) {
+  if (!move.error) return null;
+  return (
+    <p role="alert" className="px-2 py-1 text-xs text-destructive">
+      Could not move asset: {move.error.message}
+    </p>
+  );
+}
+
+/** A room row. Also a drop target for asset cards dragged out of the selected room or building. */
 function RoomNode({ campusId, floorId, room }: { campusId: string; floorId: string; room: Room }) {
   const selection = useSelection();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { can: canMove } = useCan("asset", "update");
-  // Drags only start in the selected room's grid, so that room is the source.
-  const move = useMoveAsset(selection.campusId ?? "", selection.roomId ?? "");
-  const [over, setOver] = useState(false);
+  const drop = useAssetDrop({ roomId: room.id });
   const isCurrent = room.id === selection.roomId;
-  const accepts = (e: React.DragEvent) => canMove && !isCurrent && !!selection.roomId && isAssetDrag(e);
 
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton
         render={<button type="button" />}
-        className={cn("w-full text-left", over && "bg-sidebar-accent ring-2 ring-sidebar-ring")}
+        className={cn("w-full text-left", drop.over && dropRing)}
         size="sm"
         isActive={isCurrent}
         onClick={() => {
           selection.selectRoom(campusId, floorId, room.id);
           if (isMobile) setOpenMobile(false);
         }}
-        onDragOver={(e) => {
-          if (!accepts(e)) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          setOver(true);
-        }}
-        onDragLeave={(e) => {
-          if (!staysInside(e)) setOver(false);
-        }}
-        onDrop={(e) => {
-          setOver(false);
-          const assetId = droppedAssetId(e);
-          if (!accepts(e) || !assetId) return;
-          e.preventDefault();
-          move.mutate({ assetId, roomId: room.id });
-        }}
+        onDragOver={drop.onDragOver}
+        onDragLeave={drop.onDragLeave}
+        onDrop={drop.onDrop}
       >
         <Icons.room />
         <span className="shrink-0 tabular-nums">{room.number}</span>
         <span className="min-w-0 flex-1 truncate text-muted-foreground">{room.name}</span>
-        {move.isPending && <Icons.move className="size-3.5 shrink-0 animate-pulse text-muted-foreground" aria-label="Moving" />}
+        {drop.move.isPending && <Icons.move className="size-3.5 shrink-0 animate-pulse text-muted-foreground" aria-label="Moving" />}
         {room.assessedAt != null && (
           <Icons.ui.confirm className="size-3.5 shrink-0 text-muted-foreground" aria-label="Walked" />
         )}
       </SidebarMenuSubButton>
-      {move.error && (
-        <p role="alert" className="px-2 py-1 text-xs text-destructive">
-          Could not move asset: {move.error.message}
-        </p>
-      )}
+      <DropError move={drop.move} />
     </SidebarMenuSubItem>
   );
 }

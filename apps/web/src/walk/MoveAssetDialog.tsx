@@ -12,43 +12,59 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTRPC } from "@/trpc";
-import { useMoveAsset } from "./mutations";
-import type { AssetWithType } from "./types";
+import { locationInput, useMoveAsset } from "./mutations";
+import { type AssetLocation, type AssetWithType, isRoomLocation } from "./types";
+
+/** Select values: a room or a building's building level, kept distinct in one list. */
+const encode = (loc: AssetLocation) => (isRoomLocation(loc) ? `room:${loc.roomId}` : `building:${loc.buildingId}`);
+function decode(value: string): AssetLocation {
+  const [kind, id] = value.split(":") as [string, string];
+  return kind === "room" ? { roomId: id } : { buildingId: id };
+}
 
 /**
- * Picks another room in the same campus for an asset. The keyboard / touch counterpart of dragging
- * a card onto the tree, which also reaches other campuses.
+ * Picks another room, or a building's building level, in the same campus for an asset. The
+ * keyboard / touch counterpart of dragging a card onto the tree, which also reaches other campuses.
  */
 export function MoveAssetDialog({
   open,
   onOpenChange,
   campusId,
-  roomId,
+  from,
   asset,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campusId: string;
-  roomId: string;
+  from: AssetLocation;
   asset: AssetWithType;
 }) {
   const trpc = useTRPC();
   const tree = useQuery(trpc.campus.tree.queryOptions({ campusId }));
-  const move = useMoveAsset(campusId, roomId);
+  const move = useMoveAsset(campusId, from);
   const [target, setTarget] = useState<string | null>(null);
+  const current = encode(from);
 
-  const groups = (tree.data?.buildings ?? []).flatMap((b) =>
-    b.floors.map((f) => ({
-      key: f.id,
-      label: `${b.name} · ${f.name}`,
-      rooms: f.rooms.filter((r) => r.id !== roomId),
-    })),
+  // One group per building: its building level first, then every room by floor.
+  const groups = (tree.data?.buildings ?? []).map((b) => ({
+    key: b.id,
+    label: b.name,
+    options: [
+      { value: encode({ buildingId: b.id }), primary: "Building level", secondary: "" },
+      ...b.floors.flatMap((f) =>
+        f.rooms.map((r) => ({ value: encode({ roomId: r.id }), primary: r.number, secondary: `${r.name} · ${f.name}` })),
+      ),
+    ].filter((o) => o.value !== current),
+  }));
+  const labels = Object.fromEntries(
+    groups.flatMap((g) =>
+      g.options.map((o) => [o.value, o.secondary ? `${g.label} · ${o.primary} · ${o.secondary}` : `${g.label} · ${o.primary}`]),
+    ),
   );
-  const roomLabels = Object.fromEntries(groups.flatMap((g) => g.rooms.map((r) => [r.id, `${r.number} · ${r.name}`])));
 
   async function submit() {
     if (!target) return;
-    await move.mutateAsync({ assetId: asset.id, roomId: target });
+    await move.mutateAsync({ assetId: asset.id, ...locationInput(decode(target)) });
     onOpenChange(false);
   }
 
@@ -59,8 +75,8 @@ export function MoveAssetDialog({
           <DialogTitle>Move asset</DialogTitle>
           <DialogDescription>
             {asset.assetType.name}
-            {asset.quantity > 1 ? ` ×${asset.quantity}` : ""} keeps its rating and notes. You can also drag a card onto a room
-            in the tree.
+            {asset.quantity > 1 ? ` ×${asset.quantity}` : ""} keeps its rating and notes. You can also drag a card onto a room or
+            building in the tree.
           </DialogDescription>
         </DialogHeader>
 
@@ -72,21 +88,21 @@ export function MoveAssetDialog({
           }}
         >
           <div className="grid gap-2">
-            <Label htmlFor="m-room">Room</Label>
-            <Select value={target} onValueChange={setTarget} items={roomLabels}>
+            <Label htmlFor="m-room">Destination</Label>
+            <Select value={target} onValueChange={setTarget} items={labels}>
               <SelectTrigger id="m-room" className="w-full">
-                <SelectValue placeholder={tree.isPending ? "Loading…" : "Choose a room"} />
+                <SelectValue placeholder={tree.isPending ? "Loading…" : "Choose a room or building level"} />
               </SelectTrigger>
               <SelectContent>
                 {groups
-                  .filter((g) => g.rooms.length > 0)
+                  .filter((g) => g.options.length > 0)
                   .map((g) => (
                     <SelectGroup key={g.key}>
                       <SelectLabel>{g.label}</SelectLabel>
-                      {g.rooms.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          <span className="tabular-nums">{r.number}</span>
-                          <span className="text-muted-foreground">{r.name}</span>
+                      {g.options.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          <span className="tabular-nums">{o.primary}</span>
+                          {o.secondary && <span className="text-muted-foreground">{o.secondary}</span>}
                         </SelectItem>
                       ))}
                     </SelectGroup>

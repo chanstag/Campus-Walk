@@ -96,6 +96,7 @@ export const officeRouter = router({
           notes: asset.notes,
           assetTag: asset.assetTag,
           building: building.name,
+          buildingId: building.id,
           roomId: room.id,
           floorId: room.floorId,
           roomNumber: room.number,

@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { asset, assetPhoto, room } from "../db/schema.js";
+import { asset, assetPhoto, building, room } from "../db/schema.js";
 import { blobStore } from "../storage/index.js";
 import { authorizedProcedure, router } from "../trpc.js";
 import type { Context } from "../trpc.js";
@@ -43,6 +43,29 @@ const descriptive = {
   notes: text(2000),
 };
 
+/**
+ * Where an asset goes: a room, or a building's building level (no room). Exactly one of the two.
+ * Building-level covers building systems (roof, HVAC, boiler) and delivered-but-unplaced equipment.
+ */
+const location = {
+  roomId: z.uuid().optional(),
+  buildingId: z.uuid().optional(),
+};
+const oneLocation = (v: { roomId?: string; buildingId?: string }) => (v.roomId == null) !== (v.buildingId == null);
+const oneLocationError = { message: "Give exactly one of roomId or buildingId" };
+
+/** Resolves a location to the asset's { roomId, buildingId } columns, or throws NOT_FOUND. */
+async function resolveLocation(db: Context["db"], loc: { roomId?: string; buildingId?: string }) {
+  if (loc.roomId) {
+    const target = await db.query.room.findFirst({ where: eq(room.id, loc.roomId), with: { floor: true } });
+    if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
+    return { roomId: target.id, buildingId: target.floor.buildingId };
+  }
+  const target = await db.query.building.findFirst({ where: eq(building.id, loc.buildingId!) });
+  if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Building not found" });
+  return { roomId: null, buildingId: target.id };
+}
+
 export async function requireAsset(db: Context["db"], assetId: string) {
   const row = await db.query.asset.findFirst({ where: eq(asset.id, assetId) });
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found" });
@@ -57,7 +80,8 @@ export const assetRouter = router({
 
   /**
    * Assets in a building that are not in any room: building systems (roof, HVAC, boiler)
-   * and delivered-but-unplaced equipment. Split them on assetType.typicallyBuildingLevel.
+   * and delivered-but-unplaced equipment. The walk screen shows both together as the
+   * building's own assets; assetType.typicallyBuildingLevel tells them apart if needed.
    */
   byBuilding: authorizedProcedure("asset", "read")
     .input(z.object({ buildingId: z.uuid() }))
@@ -69,31 +93,29 @@ export const assetRouter = router({
       return rows.sort(byTypeThenYear);
     }),
 
-  /** Adds an asset to a room. Building is derived from the room. A condition given here counts as an assessment. */
+  /**
+   * Adds an asset to a room (building derived from the room) or to a building's building level.
+   * A condition given here counts as an assessment.
+   */
   create: authorizedProcedure("asset", "create")
     .input(
-      z.object({
-        roomId: z.uuid(),
-        assetTypeId: z.uuid(),
-        quantity: z.number().int().min(1).default(1),
-        condition: condition.nullable().default(null),
-        ...descriptive,
-      }),
+      z
+        .object({
+          ...location,
+          assetTypeId: z.uuid(),
+          quantity: z.number().int().min(1).default(1),
+          condition: condition.nullable().default(null),
+          ...descriptive,
+        })
+        .refine(oneLocation, oneLocationError),
     )
     .mutation(async ({ ctx, input }) => {
-      const target = await ctx.db.query.room.findFirst({
-        where: eq(room.id, input.roomId),
-        with: { floor: true },
-      });
-      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
-      const { roomId, assetTypeId, quantity, condition: rating, ...rest } = input;
+      const { roomId, buildingId, condition: rating, ...rest } = input;
+      const placed = await resolveLocation(ctx.db, { roomId, buildingId });
       const [inserted] = await ctx.db
         .insert(asset)
         .values({
-          roomId,
-          assetTypeId,
-          buildingId: target.floor.buildingId,
-          quantity,
+          ...placed,
           condition: rating,
           assessedAt: rating == null ? null : new Date(),
           ...rest,
@@ -122,22 +144,15 @@ export const assetRouter = router({
     }),
 
   /**
-   * Moves an asset into another room, possibly in another building. Building follows the room;
-   * condition and notes travel with the asset.
+   * Moves an asset into another room or onto a building's building level, possibly in another
+   * building. Building follows the room; condition and notes travel with the asset.
    */
   move: authorizedProcedure("asset", "update")
-    .input(z.object({ assetId: z.uuid(), roomId: z.uuid() }))
+    .input(z.object({ assetId: z.uuid(), ...location }).refine(oneLocation, oneLocationError))
     .mutation(async ({ ctx, input }) => {
       await requireAsset(ctx.db, input.assetId);
-      const target = await ctx.db.query.room.findFirst({
-        where: eq(room.id, input.roomId),
-        with: { floor: true },
-      });
-      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
-      await ctx.db
-        .update(asset)
-        .set({ roomId: target.id, buildingId: target.floor.buildingId })
-        .where(eq(asset.id, input.assetId));
+      const placed = await resolveLocation(ctx.db, input);
+      await ctx.db.update(asset).set(placed).where(eq(asset.id, input.assetId));
       const [moved] = await fetchAssets(ctx.db, eq(asset.id, input.assetId));
       return moved!;
     }),

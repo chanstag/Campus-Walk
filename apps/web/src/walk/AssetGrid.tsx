@@ -31,8 +31,8 @@ import { startAssetDrag } from "./drag";
 import { FinishRoomDialog } from "./FinishRoomDialog";
 import { MoveAssetDialog } from "./MoveAssetDialog";
 import { RoomDialog } from "./RoomDialog";
-import { useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
-import type { AssetWithType, Room } from "./types";
+import { assetListOptions, useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
+import { type AssetLocation, type AssetWithType, isRoomLocation, type Room } from "./types";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
   Furniture: Icons.assetCategory.furniture,
@@ -41,32 +41,32 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   "Building System": Icons.assetCategory.hvac,
 };
 
-/** Main area: the selected room's header, actions, and its assets as cards grouped by category. */
-export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) {
+/**
+ * An asset list as cards grouped by category, for a room or a building's own assets, with the
+ * add and move dialogs. The caller supplies the header, which gets the "add asset" opener.
+ */
+export function AssetGrid({
+  campusId,
+  location,
+  emptyText,
+  header,
+}: {
+  campusId: string;
+  location: AssetLocation;
+  emptyText: string;
+  header: (onAdd: () => void) => React.ReactNode;
+}) {
   const trpc = useTRPC();
-  const assets = useQuery(trpc.asset.byRoom.queryOptions({ roomId: room.id }));
+  const assets = useQuery(assetListOptions(trpc, location));
   const [adding, setAdding] = useState(false);
-  const [finishing, setFinishing] = useState(false);
-  const [editingRoom, setEditingRoom] = useState(false);
   // Lives here, not in the card: a move removes the card from the list before the request settles.
   const [moving, setMoving] = useState<AssetWithType | null>(null);
   const unrated = assets.data?.filter((a) => a.condition == null).length ?? 0;
   const { can: canCreate } = useCan("asset", "create");
-  const { can: canAssessRoom } = useCan("room", "assess");
-  const { can: canUpdateRoom } = useCan("room", "update");
 
   return (
     <div className="flex flex-col gap-6">
-      <RoomHeader
-        room={room}
-        onAdd={() => setAdding(true)}
-        onFinish={() => setFinishing(true)}
-        onEdit={() => setEditingRoom(true)}
-        canFinish={!!assets.data}
-        showAdd={canCreate}
-        showFinish={canAssessRoom}
-        showEdit={canUpdateRoom}
-      />
+      {header(() => setAdding(true))}
       {assets.isPending && (
         <Grid>
           {Array.from({ length: 6 }, (_, i) => (
@@ -77,7 +77,7 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
       {assets.error && <p className="text-sm text-destructive">Could not load assets: {assets.error.message}</p>}
       {assets.data && assets.data.length === 0 && (
         <Empty icon={Icons.asset}>
-          No assets recorded in this room yet.
+          {emptyText}
           {canCreate && (
             <Button size="sm" className="mt-3" onClick={() => setAdding(true)}>
               <Icons.ui.add />
@@ -89,28 +89,63 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
       {assets.data && assets.data.length > 0 && (
         <AssetSections
           campusId={campusId}
-          roomId={room.id}
+          location={location}
           assets={assets.data}
           unrated={unrated}
           onMove={setMoving}
         />
       )}
 
-      {adding && <AssetDialog open onOpenChange={setAdding} campusId={campusId} roomId={room.id} />}
+      {adding && <AssetDialog open onOpenChange={setAdding} campusId={campusId} location={location} />}
       {moving && (
         <MoveAssetDialog
           open
           onOpenChange={(o) => !o && setMoving(null)}
           campusId={campusId}
-          roomId={room.id}
+          from={location}
           asset={moving}
         />
       )}
+    </div>
+  );
+}
+
+/** Main area for a selected room: its header with Finish / Edit, then its assets. */
+export function RoomAssets({ campusId, room }: { campusId: string; room: Room }) {
+  const trpc = useTRPC();
+  // Same key as the grid's query, so this is a cache read.
+  const assets = useQuery(trpc.asset.byRoom.queryOptions({ roomId: room.id }));
+  const [finishing, setFinishing] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(false);
+  const unrated = assets.data?.filter((a) => a.condition == null).length ?? 0;
+  const { can: canCreate } = useCan("asset", "create");
+  const { can: canAssessRoom } = useCan("room", "assess");
+  const { can: canUpdateRoom } = useCan("room", "update");
+
+  return (
+    <>
+      <AssetGrid
+        campusId={campusId}
+        location={{ roomId: room.id }}
+        emptyText="No assets recorded in this room yet."
+        header={(onAdd) => (
+          <RoomHeader
+            room={room}
+            onAdd={onAdd}
+            onFinish={() => setFinishing(true)}
+            onEdit={() => setEditingRoom(true)}
+            canFinish={!!assets.data}
+            showAdd={canCreate}
+            showFinish={canAssessRoom}
+            showEdit={canUpdateRoom}
+          />
+        )}
+      />
       {finishing && (
         <FinishRoomDialog open onOpenChange={setFinishing} campusId={campusId} room={room} unratedCount={unrated} />
       )}
       {editingRoom && <RoomDialog open onOpenChange={setEditingRoom} campusId={campusId} room={room} />}
-    </div>
+    </>
   );
 }
 
@@ -189,13 +224,13 @@ function Fact({ label, value }: { label: string; value: string }) {
 /** The API already sorts by category, type, install year, so grouping preserves order. */
 function AssetSections({
   campusId,
-  roomId,
+  location,
   assets,
   unrated,
   onMove,
 }: {
   campusId: string;
-  roomId: string;
+  location: AssetLocation;
   assets: AssetWithType[];
   unrated: number;
   onMove: (asset: AssetWithType) => void;
@@ -229,7 +264,7 @@ function AssetSections({
             </h3>
             <Grid>
               {items.map((a) => (
-                <AssetCard key={a.id} campusId={campusId} roomId={roomId} asset={a} onMove={() => onMove(a)} />
+                <AssetCard key={a.id} campusId={campusId} location={location} asset={a} onMove={() => onMove(a)} />
               ))}
             </Grid>
           </section>
@@ -245,17 +280,17 @@ function Grid({ children }: { children: React.ReactNode }) {
 
 function AssetCard({
   campusId,
-  roomId,
+  location,
   asset,
   onMove,
 }: {
   campusId: string;
-  roomId: string;
+  location: AssetLocation;
   asset: AssetWithType;
   onMove: () => void;
 }) {
-  const assess = useAssessAsset(campusId, roomId);
-  const remove = useRemoveAsset(campusId, roomId);
+  const assess = useAssessAsset(campusId, location);
+  const remove = useRemoveAsset(campusId, location);
   const [editing, setEditing] = useState(false);
   const [notingOpen, setNotingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -271,7 +306,7 @@ function AssetCard({
       // Not while the note editor is open: a draggable ancestor swallows text selection in the textarea.
       draggable={canUpdate && !notingOpen}
       onDragStart={(e) => {
-        startAssetDrag(e, asset.id);
+        startAssetDrag(e, asset.id, e.currentTarget);
         setDragging(true);
       }}
       onDragEnd={() => setDragging(false)}
@@ -310,7 +345,7 @@ function AssetCard({
                 {canUpdate && (
                   <DropdownMenuItem onClick={onMove}>
                     <Icons.move />
-                    Move to room…
+                    Move…
                   </DropdownMenuItem>
                 )}
                 {canDelete && (
@@ -331,7 +366,7 @@ function AssetCard({
         {asset.installYear != null && <span>Installed {asset.installYear}</span>}
       </p>
       {notingOpen ? (
-        <NoteEditor campusId={campusId} roomId={roomId} asset={asset} onDone={() => setNotingOpen(false)} />
+        <NoteEditor campusId={campusId} location={location} asset={asset} onDone={() => setNotingOpen(false)} />
       ) : (
         asset.notes && <p className="text-sm whitespace-pre-line">{asset.notes}</p>
       )}
@@ -352,14 +387,14 @@ function AssetCard({
       </div>
       {assess.error && <p className="text-xs text-destructive">{assess.error.message}</p>}
 
-      {editing && <AssetDialog open onOpenChange={setEditing} campusId={campusId} roomId={roomId} asset={asset} />}
+      {editing && <AssetDialog open onOpenChange={setEditing} campusId={campusId} location={location} asset={asset} />}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this asset?</AlertDialogTitle>
             <AlertDialogDescription>
               {asset.assetType.name}
-              {asset.quantity > 1 ? ` ×${asset.quantity}` : ""} will be removed from this room. This cannot be undone.
+              {asset.quantity > 1 ? ` ×${asset.quantity}` : ""} will be removed from this {isRoomLocation(location) ? "room" : "building"}. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -377,16 +412,16 @@ function AssetCard({
 /** Inline note editing on the card, so a quick observation doesn't need the full edit dialog. */
 function NoteEditor({
   campusId,
-  roomId,
+  location,
   asset,
   onDone,
 }: {
   campusId: string;
-  roomId: string;
+  location: AssetLocation;
   asset: AssetWithType;
   onDone: () => void;
 }) {
-  const update = useUpdateAsset(campusId, roomId);
+  const update = useUpdateAsset(campusId, location);
   const [notes, setNotes] = useState(asset.notes ?? "");
   const unchanged = notes.trim() === (asset.notes ?? "");
   const save = () => {
