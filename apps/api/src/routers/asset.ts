@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { asset, room } from "../db/schema.js";
+import { asset, assetPhoto, room } from "../db/schema.js";
+import { blobStore } from "../storage/index.js";
 import { authorizedProcedure, router } from "../trpc.js";
 import type { Context } from "../trpc.js";
 
@@ -42,7 +43,7 @@ const descriptive = {
   notes: text(2000),
 };
 
-async function requireAsset(db: Context["db"], assetId: string) {
+export async function requireAsset(db: Context["db"], assetId: string) {
   const row = await db.query.asset.findFirst({ where: eq(asset.id, assetId) });
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found" });
   return row;
@@ -138,8 +139,11 @@ export const assetRouter = router({
     }),
 
   remove: authorizedProcedure("asset", "delete").input(z.object({ assetId: z.uuid() })).mutation(async ({ ctx, input }) => {
+    // Photo rows cascade with the asset; their files have to be removed by hand.
+    const photos = await ctx.db.select({ key: assetPhoto.key }).from(assetPhoto).where(eq(assetPhoto.assetId, input.assetId));
     const deleted = await ctx.db.delete(asset).where(eq(asset.id, input.assetId)).returning({ id: asset.id });
     if (deleted.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Asset not found" });
+    await blobStore.delete(photos.map((p) => p.key));
     return { id: input.assetId };
   }),
 });

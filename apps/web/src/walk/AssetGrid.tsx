@@ -26,6 +26,7 @@ import { ConditionBadge, ConditionPicker } from "@/lib/condition";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
 import { AssetDialog } from "./AssetDialog";
+import { AssetPhotos } from "./AssetPhotos";
 import { FinishRoomDialog } from "./FinishRoomDialog";
 import { RoomDialog } from "./RoomDialog";
 import { useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
@@ -287,6 +288,7 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
       ) : (
         asset.notes && <p className="text-sm whitespace-pre-line">{asset.notes}</p>
       )}
+      <AssetPhotos assetId={asset.id} label={asset.assetTag ? `${asset.assetType.name} ${asset.assetTag}` : asset.assetType.name} />
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
         <ConditionPicker

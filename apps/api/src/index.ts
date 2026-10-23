@@ -6,6 +6,7 @@ import Fastify from "fastify";
 import { auth } from "./auth/auth.js";
 import { env } from "./env.js";
 import { appRouter, type AppRouter } from "./router.js";
+import { filesRoutes } from "./storage/routes.js";
 import { createContext } from "./trpc.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -60,6 +61,9 @@ await server.register(fastifyTRPCPlugin, {
     },
   } satisfies FastifyTRPCPluginOptions<AppRouter>["trpcOptions"],
 });
+
+// Photo bytes for the local blob store (signed PUT/GET URLs; see src/storage/).
+await server.register(filesRoutes);
 
 // Plain Fastify route, coexisting with tRPC. Useful for load balancer checks.
 server.get("/health", async () => ({ ok: true }));

@@ -187,6 +187,27 @@ export const asset = pgTable(
   ],
 );
 
+/**
+ * Photos of an asset. The file lives in the blob store (src/storage/); only its object key is
+ * stored here, and the API hands out short-lived signed URLs, so moving storage never needs a
+ * data migration.
+ */
+export const assetPhoto = pgTable(
+  "asset_photo",
+  {
+    id,
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "cascade" }),
+    key: text("key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt,
+  },
+  (t) => [index("asset_photo_asset_idx").on(t.assetId)],
+);
+
 // ---------- relations (drizzle relational query API) ----------
 
 export const districtRelations = relations(district, ({ many }) => ({
@@ -218,10 +239,16 @@ export const assetTypeRelations = relations(assetType, ({ many }) => ({
   assets: many(asset),
 }));
 
-export const assetRelations = relations(asset, ({ one }) => ({
+export const assetRelations = relations(asset, ({ one, many }) => ({
   assetType: one(assetType, { fields: [asset.assetTypeId], references: [assetType.id] }),
   building: one(building, { fields: [asset.buildingId], references: [building.id] }),
   room: one(room, { fields: [asset.roomId], references: [room.id] }),
+  photos: many(assetPhoto),
+}));
+
+export const assetPhotoRelations = relations(assetPhoto, ({ one }) => ({
+  asset: one(asset, { fields: [assetPhoto.assetId], references: [asset.id] }),
+  uploader: one(user, { fields: [assetPhoto.uploadedBy], references: [user.id] }),
 }));
 
 /**
