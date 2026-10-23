@@ -145,10 +145,13 @@ function Stat({ label, value, className }: { label: string; value: number; class
   );
 }
 
-function walkHref(campusId: string, floorId: string | null, roomId: string | null) {
+/** A walk-screen link to a room (with its floor) or, for room-less assets, to the building. */
+function walkHref(campusId: string, at: { buildingId?: string; floorId?: string | null; roomId?: string | null }) {
   const p = new URLSearchParams({ campus: campusId });
-  if (floorId) p.set("floor", floorId);
-  if (roomId) p.set("room", roomId);
+  if (at.roomId) {
+    if (at.floorId) p.set("floor", at.floorId);
+    p.set("room", at.roomId);
+  } else if (at.buildingId) p.set("building", at.buildingId);
   return `/walk?${p}`;
 }
 
@@ -225,13 +228,15 @@ function CampusDetail({ campusId, detail }: { campusId: string; detail: Detail }
                       <ConditionBadge rating={a.condition} />
                     </TableCell>
                     <TableCell>
-                      {a.roomId ? (
-                        <Link className="underline-offset-4 hover:underline" to={walkHref(campusId, a.floorId, a.roomId)}>
-                          {a.building} · {a.roomNumber} {a.roomName}
-                        </Link>
-                      ) : (
-                        <span className="text-muted-foreground">{a.building} · building level</span>
-                      )}
+                      <Link className="underline-offset-4 hover:underline" to={walkHref(campusId, a)}>
+                        {a.roomId ? (
+                          `${a.building} · ${a.roomNumber} ${a.roomName}`
+                        ) : (
+                          <>
+                            {a.building} · <span className="text-muted-foreground">building level</span>
+                          </>
+                        )}
+                      </Link>
                     </TableCell>
                     <TableCell className="max-w-64 truncate text-muted-foreground">{a.notes}</TableCell>
                   </TableRow>
@@ -257,7 +262,7 @@ function CampusDetail({ campusId, detail }: { campusId: string; detail: Detail }
             {detail.roomsRemaining.map((r) => (
               <li key={r.id}>
                 <Link
-                  to={walkHref(campusId, r.floorId, r.id)}
+                  to={walkHref(campusId, { floorId: r.floorId, roomId: r.id })}
                   className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm hover:bg-accent/60"
                 >
                   <Icons.room className="size-4 shrink-0 text-muted-foreground" />

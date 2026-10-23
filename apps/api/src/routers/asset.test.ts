@@ -63,6 +63,46 @@ describe("asset.create", () => {
   });
 });
 
+describe("asset.byBuilding", () => {
+  it("lists only the building's room-less assets", async () => {
+    const hvac = await findAssetByTag("CR-1205"); // Rooftop HVAC Unit, no room
+    expect(hvac.roomId).toBeNull();
+    const rows = await caller.asset.byBuilding({ buildingId: hvac.buildingId });
+    expect(rows.some((a) => a.id === hvac.id)).toBe(true);
+    expect(rows.every((a) => a.roomId === null && a.buildingId === hvac.buildingId)).toBe(true);
+  });
+});
+
+describe("asset.create at building level", () => {
+  it("stores a null room on the given building", async () => {
+    const hvac = await findAssetByTag("CR-1205");
+    const type = await findAssetType("Boiler");
+    const created = await caller.asset.create({ buildingId: hvac.buildingId, assetTypeId: type.id, condition: 4 });
+    expect(created.roomId).toBeNull();
+    expect(created.buildingId).toBe(hvac.buildingId);
+    expect(created.condition).toBe(4);
+    const rows = await caller.asset.byBuilding({ buildingId: hvac.buildingId });
+    expect(rows.some((a) => a.id === created.id)).toBe(true);
+  });
+
+  it("rejects both or neither of roomId and buildingId", async () => {
+    const hvac = await findAssetByTag("CR-1205");
+    const target = await findRoomByNumber("102");
+    const type = await findAssetType("Boiler");
+    await expect(
+      caller.asset.create({ roomId: target.id, buildingId: hvac.buildingId, assetTypeId: type.id }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.asset.create({ assetTypeId: type.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("throws NOT_FOUND for an unknown building", async () => {
+    const type = await findAssetType("Boiler");
+    await expect(
+      caller.asset.create({ buildingId: crypto.randomUUID(), assetTypeId: type.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
 describe("asset.update", () => {
   it("leaves omitted fields alone, clears null ones, and stores empty strings as null", async () => {
     const tagged = await findAssetByTag("CR-1005"); // Interactive Display, Promethean PRO-840
@@ -124,6 +164,32 @@ describe("asset.move", () => {
     expect(left.some((a) => a.id === tagged.id)).toBe(false);
     const arrived = await caller.asset.byRoom({ roomId: to.id });
     expect(arrived.some((a) => a.id === tagged.id)).toBe(true);
+  });
+
+  it("moves a room asset to building level and back into a room", async () => {
+    const tagged = await findAssetByTag("CR-1004"); // room 101
+    const room101 = await findRoomByNumber("101");
+    const toBuilding = await caller.asset.move({ assetId: tagged.id, buildingId: room101.floor.buildingId });
+    expect(toBuilding.roomId).toBeNull();
+    expect(toBuilding.buildingId).toBe(room101.floor.buildingId);
+    expect(toBuilding.condition).toBe(tagged.condition);
+
+    const p101 = await findRoomByNumber("P101");
+    const toRoom = await caller.asset.move({ assetId: tagged.id, roomId: p101.id });
+    expect(toRoom.roomId).toBe(p101.id);
+    expect(toRoom.buildingId).toBe(p101.floor.buildingId);
+  });
+
+  it("rejects both or neither target, and an unknown building", async () => {
+    const tagged = await findAssetByTag("CR-1004");
+    const target = await findRoomByNumber("102");
+    await expect(
+      caller.asset.move({ assetId: tagged.id, roomId: target.id, buildingId: target.floor.buildingId }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.asset.move({ assetId: tagged.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.asset.move({ assetId: tagged.id, buildingId: crypto.randomUUID() })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("is allowed for field users", async () => {

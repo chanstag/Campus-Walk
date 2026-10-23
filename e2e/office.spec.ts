@@ -24,6 +24,17 @@ test.describe("office", () => {
     await expect(page.getByRole("heading", { level: 2, name: /^P101/ })).toBeVisible();
   });
 
+  test("a poor-condition building system links to its building on the walk screen", async ({ page }) => {
+    await page.goto("/office");
+    await page.getByRole("button", { name: new RegExp(`^${SAMPLE.campus}`) }).click();
+    // Sample: CR-1212, the Main Building boiler, is Poor and has no room.
+    const row = page.getByRole("row").filter({ hasText: "CR-1212" });
+    await row.getByRole("link", { name: /Main Building · building level/ }).click();
+    await expect(page).toHaveURL(/\/walk\?campus=[^&]+&building=[^&]+$/);
+    await expect(page.getByRole("heading", { level: 2, name: "Main Building", exact: true })).toBeVisible();
+    await expect(page.getByRole("article").filter({ hasText: "CR-1212" })).toBeVisible();
+  });
+
   test("the office and walk screens share the ?campus= key", async ({ page }) => {
     await page.goto("/office");
     await page.getByRole("button", { name: new RegExp(`^${SAMPLE.campus}`) }).click();

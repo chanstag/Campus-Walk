@@ -23,10 +23,10 @@ test.describe("walk: moving an asset to another room", () => {
   test("the card menu moves an asset into a room in another building", async ({ page }) => {
     await openRoom(page, room102);
     await assetCard(page, "CR-1005").getByRole("button", { name: "Asset actions" }).click();
-    await page.getByRole("menuitem", { name: "Move to room…" }).click();
+    await page.getByRole("menuitem", { name: "Move…" }).click();
 
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("combobox", { name: "Room" }).click();
+    await dialog.getByRole("combobox", { name: "Destination" }).click();
     await page.getByRole("option", { name: /^P101/ }).click();
     await dialog.getByRole("button", { name: "Move" }).click();
     await expect(dialog).toBeHidden();

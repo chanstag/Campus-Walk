@@ -47,3 +47,17 @@ export function treeRoom(page: Page, room: RoomTarget) {
 export function assetCard(page: Page, text: string | RegExp) {
   return page.getByRole("article").filter({ hasText: text });
 }
+
+/** Clicks through the sidebar tree to a building and waits for its own (building-level) assets. */
+export async function openBuilding(page: Page, campus: string, building: string) {
+  await page.goto("/walk");
+  await page.getByRole("button", { name: campus, exact: true }).click();
+  await treeBuilding(page, building).click();
+  await expect(page.getByRole("heading", { level: 2, name: building, exact: true })).toBeVisible();
+  await expect(page.getByText(/\d+ records?, \d+ items?|No building-level assets/)).toBeVisible();
+}
+
+/** The sidebar entry for a building: selects its own assets and toggles its floors. */
+export function treeBuilding(page: Page, building: string) {
+  return page.getByRole("button", { name: building, exact: true });
+}

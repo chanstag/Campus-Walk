@@ -12,13 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Icons } from "@/components/icons";
 import { CONDITION_OPTIONS } from "@/lib/condition";
 import { useTRPC } from "@/trpc";
-import { useCreateAsset, useUpdateAsset } from "./mutations";
-import type { AssetWithType } from "./types";
+import { locationInput, useCreateAsset, useUpdateAsset } from "./mutations";
+import { type AssetLocation, type AssetWithType, isRoomLocation } from "./types";
 
 type Form = {
   assetTypeId: string;
@@ -48,24 +48,28 @@ function fromAsset(a?: AssetWithType): Form {
 
 const NONE = "__none__";
 
-/** Create (no `asset`) or edit an asset in a room. Condition is only set here on create; edits use the card picker. */
+/**
+ * Create (no `asset`) or edit an asset in a room or at a building's building level. Condition is
+ * only set here on create; edits use the card picker.
+ */
 export function AssetDialog({
   open,
   onOpenChange,
   campusId,
-  roomId,
+  location,
   asset,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campusId: string;
-  roomId: string;
+  location: AssetLocation;
   asset?: AssetWithType;
 }) {
   const trpc = useTRPC();
   const types = useQuery(trpc.assetType.list.queryOptions());
-  const create = useCreateAsset(campusId, roomId);
-  const update = useUpdateAsset(campusId, roomId);
+  const create = useCreateAsset(campusId, location);
+  const update = useUpdateAsset(campusId, location);
+  const inRoom = isRoomLocation(location);
   const [form, setForm] = useState<Form>(() => fromAsset(asset));
   const [detailsOpen, setDetailsOpen] = useState(() => !!(asset?.assetTag || asset?.manufacturer || asset?.serialNumber));
   const set = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -76,6 +80,13 @@ export function AssetDialog({
   const pending = create.isPending || update.isPending;
   const error = create.error ?? update.error;
 
+  // At building level, building systems (roof, HVAC, boiler) come first.
+  const typeGroups = inRoom
+    ? [{ label: null, types: types.data ?? [] }]
+    : [
+        { label: "Building systems", types: (types.data ?? []).filter((t) => t.typicallyBuildingLevel) },
+        { label: "Other", types: (types.data ?? []).filter((t) => !t.typicallyBuildingLevel) },
+      ];
   const typeLabels = Object.fromEntries((types.data ?? []).map((t) => [t.id, `${t.name} · ${t.category}`]));
   const conditionLabels = { [NONE]: "Not rated", ...Object.fromEntries(CONDITION_OPTIONS.map((o) => [String(o.value), o.label])) };
 
@@ -91,7 +102,7 @@ export function AssetDialog({
       notes: form.notes,
     };
     if (editing) await update.mutateAsync({ assetId: asset.id, ...fields });
-    else await create.mutateAsync({ roomId, condition: form.condition === "" ? null : Number(form.condition), ...fields });
+    else await create.mutateAsync({ ...locationInput(location), condition: form.condition === "" ? null : Number(form.condition), ...fields });
     onOpenChange(false);
   }
 
@@ -101,7 +112,7 @@ export function AssetDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit asset" : "Add asset"}</DialogTitle>
           <DialogDescription>
-            {editing ? "Change what this record describes. Use the card to change its rating." : "Record something in this room."}
+            {editing ? "Change what this record describes. Use the card to change its rating." : inRoom ? "Record something in this room." : "Record a building system or equipment that has no room yet."}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,10 +129,15 @@ export function AssetDialog({
                 <SelectValue placeholder={types.isPending ? "Loading…" : "Choose a type"} />
               </SelectTrigger>
               <SelectContent>
-                {(types.data ?? []).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name} <span className="text-muted-foreground">· {t.category}</span>
-                  </SelectItem>
+                {typeGroups.map((g) => (
+                  <SelectGroup key={g.label ?? "all"}>
+                    {g.label && <SelectLabel>{g.label}</SelectLabel>}
+                    {g.types.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name} <span className="text-muted-foreground">· {t.category}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
