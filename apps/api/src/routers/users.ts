@@ -7,7 +7,7 @@ import { auth } from "../auth/auth.js";
 import { hashInviteToken, inviteExpiry, inviteUrl, newInviteToken } from "../auth/invitations.js";
 import { ROLES } from "../auth/roles.js";
 import { invitation, user } from "../db/schema.js";
-import { adminProcedure, router } from "../trpc.js";
+import { authorizedProcedure, router } from "../trpc.js";
 
 const roleSchema = z.enum(ROLES);
 const passwordSchema = z.string().min(10).max(128);
@@ -34,7 +34,7 @@ async function authCall<T>(fn: () => Promise<T>): Promise<T> {
  * The raw invite token is only ever returned from `invite` and `regenerateLink`.
  */
 export const usersRouter = router({
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: authorizedProcedure("user", "read").query(async ({ ctx }) => {
     const [users, invitations] = await Promise.all([
       ctx.db
         .select({
@@ -57,7 +57,7 @@ export const usersRouter = router({
     return { users, invitations };
   }),
 
-  invite: adminProcedure
+  invite: authorizedProcedure("user", "invite")
     .input(z.object({ email: z.email(), name: z.string().trim().max(200).optional(), role: roleSchema }))
     .mutation(async ({ ctx, input }) => {
       const email = input.email.toLowerCase();
@@ -82,7 +82,7 @@ export const usersRouter = router({
       return { invitationId: row!.id, url: inviteUrl(token) };
     }),
 
-  regenerateLink: adminProcedure.input(z.object({ invitationId: z.uuid() })).mutation(async ({ ctx, input }) => {
+  regenerateLink: authorizedProcedure("user", "invite").input(z.object({ invitationId: z.uuid() })).mutation(async ({ ctx, input }) => {
     const token = newInviteToken();
     const [row] = await ctx.db
       .update(invitation)
@@ -93,12 +93,12 @@ export const usersRouter = router({
     return { invitationId: row.id, url: inviteUrl(token) };
   }),
 
-  revokeInvitation: adminProcedure.input(z.object({ invitationId: z.uuid() })).mutation(async ({ ctx, input }) => {
+  revokeInvitation: authorizedProcedure("user", "invite").input(z.object({ invitationId: z.uuid() })).mutation(async ({ ctx, input }) => {
     await ctx.db.delete(invitation).where(eq(invitation.id, input.invitationId));
     return { ok: true as const };
   }),
 
-  setRole: adminProcedure
+  setRole: authorizedProcedure("user", "update")
     .input(z.object({ userId: z.string(), role: roleSchema }))
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.user.id && input.role !== "admin") {
@@ -108,7 +108,7 @@ export const usersRouter = router({
       return { ok: true as const };
     }),
 
-  ban: adminProcedure
+  ban: authorizedProcedure("user", "update")
     .input(z.object({ userId: z.string(), reason: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot ban yourself." });
@@ -118,19 +118,19 @@ export const usersRouter = router({
       return { ok: true as const };
     }),
 
-  unban: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+  unban: authorizedProcedure("user", "update").input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     await authCall(() => auth.api.unbanUser({ body: input, headers: headersOf(ctx) }));
     return { ok: true as const };
   }),
 
-  remove: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+  remove: authorizedProcedure("user", "delete").input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot remove yourself." });
     await authCall(() => auth.api.removeUser({ body: input, headers: headersOf(ctx) }));
     return { ok: true as const };
   }),
 
   /** Stand-in for "forgot password" until email exists: admin sets one and tells the user. */
-  setTemporaryPassword: adminProcedure
+  setTemporaryPassword: authorizedProcedure("user", "update")
     .input(z.object({ userId: z.string(), password: passwordSchema }))
     .mutation(async ({ ctx, input }) => {
       await authCall(() =>

@@ -23,6 +23,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -247,4 +248,54 @@ export const invitation = pgTable(
 
 export const invitationRelations = relations(invitation, ({ one }) => ({
   inviter: one(user, { fields: [invitation.invitedBy], references: [user.id] }),
+}));
+
+/**
+ * Permissions. `permission` is the catalog of resource/action pairs (seeded from
+ * src/auth/permission-catalog.ts); `role_permission` is what each role may do, edited on
+ * /permissions. Role names match Better Auth's `user.role` and src/auth/roles.ts.
+ */
+export const role = pgTable("role", {
+  name: text("name").primaryKey(),
+  label: text("label").notNull(),
+  description: text("description"),
+  createdAt,
+  updatedAt,
+});
+
+export const permission = pgTable(
+  "permission",
+  {
+    id,
+    resource: text("resource").notNull(),
+    action: text("action").notNull(),
+    description: text("description"),
+    createdAt,
+  },
+  (t) => [unique("permission_resource_action").on(t.resource, t.action)],
+);
+
+export const rolePermission = pgTable(
+  "role_permission",
+  {
+    roleName: text("role_name")
+      .notNull()
+      .references(() => role.name, { onDelete: "cascade" }),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permission.id, { onDelete: "cascade" }),
+    createdAt,
+  },
+  (t) => [primaryKey({ columns: [t.roleName, t.permissionId] })],
+);
+
+export const roleRelations = relations(role, ({ many }) => ({
+  grants: many(rolePermission),
+}));
+export const permissionRelations = relations(permission, ({ many }) => ({
+  grants: many(rolePermission),
+}));
+export const rolePermissionRelations = relations(rolePermission, ({ one }) => ({
+  role: one(role, { fields: [rolePermission.roleName], references: [role.name] }),
+  permission: one(permission, { fields: [rolePermission.permissionId], references: [permission.id] }),
 }));

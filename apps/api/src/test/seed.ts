@@ -10,6 +10,7 @@ import { pathToFileURL } from "node:url";
 import { auth } from "../auth/auth.js";
 import { db, type Db } from "../db/client.js";
 import { user } from "../db/schema.js";
+import { seedPermissions } from "../db/seed-permissions.js";
 import { seed } from "../db/seed.js";
 import { TEST_USERS } from "./users.js";
 
@@ -29,10 +30,14 @@ export async function ensureTestUsers(database: Db = db) {
   }
 }
 
-/** Sample data + test users. The unit of isolation for both Vitest files and Playwright specs. */
+/**
+ * Sample data + test users + the permission matrix at its defaults. The unit of isolation for
+ * both Vitest files and Playwright specs. `reset: true` undoes any grant a test changed.
+ */
 export async function seedTestDatabase(options: { log?: (line: string) => void } = {}) {
   assertTestDatabase();
   await seed(db, { log: options.log ?? (() => {}) });
+  await seedPermissions(db, { reset: true });
   await ensureTestUsers();
 }
 

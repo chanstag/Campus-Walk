@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { asset, room } from "../db/schema.js";
-import { protectedProcedure, router } from "../trpc.js";
+import { authorizedProcedure, router } from "../trpc.js";
 
 const text = (max: number) =>
   z
@@ -19,7 +19,7 @@ export const roomRouter = router({
    * Unrated assets do not block this; the count comes back so the UI can warn.
    * Calling it again on a finished room simply updates it.
    */
-  finish: protectedProcedure
+  finish: authorizedProcedure("room", "assess")
     .input(
       z.object({
         roomId: z.uuid(),

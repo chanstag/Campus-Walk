@@ -13,6 +13,7 @@ import { initAccent } from "./hooks/use-accent";
 import { initTheme } from "./hooks/use-theme";
 import "./index.css";
 import { OfficePage } from "./office/OfficePage";
+import { PermissionsPage } from "./permissions/PermissionsPage";
 import { makeTRPCClient, TRPCProvider } from "./trpc";
 import { UsersPage } from "./users/UsersPage";
 import { WalkPage } from "./walk/WalkPage";
@@ -53,11 +54,18 @@ function Root() {
 
               <Route element={<RequireAuth />}>
                 <Route path="/" element={<Navigate to="/walk" replace />} />
+              </Route>
+              <Route element={<RequireAuth permission="campus:read" />}>
                 <Route path="/walk" element={<WalkPage />} />
+              </Route>
+              <Route element={<RequireAuth permission="summary:read" />}>
                 <Route path="/office" element={<OfficePage />} />
               </Route>
-              <Route element={<RequireAuth adminOnly />}>
+              <Route element={<RequireAuth permission="user:read" />}>
                 <Route path="/users" element={<UsersPage />} />
+              </Route>
+              <Route element={<RequireAuth permission="permission:read" />}>
+                <Route path="/permissions" element={<PermissionsPage />} />
               </Route>
 
               {/* Dev-only style guide; the link is hidden in production builds. */}

@@ -3,11 +3,12 @@ import type { CreateFastifyContextOptions } from "@trpc/server/adapters/fastify"
 import { fromNodeHeaders } from "better-auth/node";
 import superjson from "superjson";
 import { auth } from "./auth/auth.js";
-import { isAdmin } from "./auth/roles.js";
+import type { Action, Resource } from "./auth/permission-catalog.js";
+import { can } from "./auth/permissions.js";
 import { db } from "./db/client.js";
 
 export async function createContext({ req, res }: CreateFastifyContextOptions) {
-  // Cookie-cached, so this is usually a signature check rather than a DB read.
+  // No cookie cache (see auth.ts), so this is one session lookup per request.
   const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
   return { req, res, db, session };
 }
@@ -26,10 +27,14 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * Stopgap gate for user management. Application permissions are not modelled in code; a
- * DB-driven ABAC layer is planned and will replace this check.
+ * Signed in AND the user's role holds `resource:action` in the role_permission table.
+ * Rejects with FORBIDDEN naming the missing permission. The resource/action pair is checked
+ * against the catalog at compile time; the grant itself is data.
  */
-export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (!isAdmin(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
-  return next();
-});
+export const authorizedProcedure = <R extends Resource>(resource: R, action: Action<R>) =>
+  protectedProcedure.use(async ({ ctx, next }) => {
+    if (!(await can(ctx.db, ctx.user.role, resource, action))) {
+      throw new TRPCError({ code: "FORBIDDEN", message: `Missing permission ${resource}:${action}` });
+    }
+    return next();
+  });

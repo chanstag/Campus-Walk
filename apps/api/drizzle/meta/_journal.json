@@ -15,6 +15,13 @@
       "when": 1792638872617,
       "tag": "0001_jittery_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792714358839,
+      "tag": "0002_mature_marvex",
+      "breakpoints": true
     }
   ]
 }
