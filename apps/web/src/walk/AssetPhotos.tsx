@@ -33,7 +33,7 @@ export function AssetPhotos({ assetId, label }: { assetId: string; label: string
             className="size-12 overflow-hidden rounded-md border bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             aria-label={`Open photo ${i + 1} of ${label}`}
           >
-            <img src={p.url} alt="" loading="lazy" className="size-full object-cover" />
+            <img src={p.url} alt="" loading="lazy" draggable={false} className="size-full object-cover" />
           </button>
         ))}
         {canUpdate && (

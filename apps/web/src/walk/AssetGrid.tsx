@@ -27,7 +27,9 @@ import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
 import { AssetDialog } from "./AssetDialog";
 import { AssetPhotos } from "./AssetPhotos";
+import { startAssetDrag } from "./drag";
 import { FinishRoomDialog } from "./FinishRoomDialog";
+import { MoveAssetDialog } from "./MoveAssetDialog";
 import { RoomDialog } from "./RoomDialog";
 import { useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
 import type { AssetWithType, Room } from "./types";
@@ -46,6 +48,8 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
   const [adding, setAdding] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [editingRoom, setEditingRoom] = useState(false);
+  // Lives here, not in the card: a move removes the card from the list before the request settles.
+  const [moving, setMoving] = useState<AssetWithType | null>(null);
   const unrated = assets.data?.filter((a) => a.condition == null).length ?? 0;
   const { can: canCreate } = useCan("asset", "create");
   const { can: canAssessRoom } = useCan("room", "assess");
@@ -83,10 +87,25 @@ export function AssetGrid({ campusId, room }: { campusId: string; room: Room }) 
         </Empty>
       )}
       {assets.data && assets.data.length > 0 && (
-        <AssetSections campusId={campusId} roomId={room.id} assets={assets.data} unrated={unrated} />
+        <AssetSections
+          campusId={campusId}
+          roomId={room.id}
+          assets={assets.data}
+          unrated={unrated}
+          onMove={setMoving}
+        />
       )}
 
       {adding && <AssetDialog open onOpenChange={setAdding} campusId={campusId} roomId={room.id} />}
+      {moving && (
+        <MoveAssetDialog
+          open
+          onOpenChange={(o) => !o && setMoving(null)}
+          campusId={campusId}
+          roomId={room.id}
+          asset={moving}
+        />
+      )}
       {finishing && (
         <FinishRoomDialog open onOpenChange={setFinishing} campusId={campusId} room={room} unratedCount={unrated} />
       )}
@@ -173,11 +192,13 @@ function AssetSections({
   roomId,
   assets,
   unrated,
+  onMove,
 }: {
   campusId: string;
   roomId: string;
   assets: AssetWithType[];
   unrated: number;
+  onMove: (asset: AssetWithType) => void;
 }) {
   const groups = new Map<string, AssetWithType[]>();
   for (const a of assets) {
@@ -208,7 +229,7 @@ function AssetSections({
             </h3>
             <Grid>
               {items.map((a) => (
-                <AssetCard key={a.id} campusId={campusId} roomId={roomId} asset={a} />
+                <AssetCard key={a.id} campusId={campusId} roomId={roomId} asset={a} onMove={() => onMove(a)} />
               ))}
             </Grid>
           </section>
@@ -222,7 +243,17 @@ function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">{children}</div>;
 }
 
-function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: string; asset: AssetWithType }) {
+function AssetCard({
+  campusId,
+  roomId,
+  asset,
+  onMove,
+}: {
+  campusId: string;
+  roomId: string;
+  asset: AssetWithType;
+  onMove: () => void;
+}) {
   const assess = useAssessAsset(campusId, roomId);
   const remove = useRemoveAsset(campusId, roomId);
   const [editing, setEditing] = useState(false);
@@ -233,12 +264,22 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
   const { can: canUpdate } = useCan("asset", "update");
   const { can: canDelete } = useCan("asset", "delete");
   const { can: canAssess } = useCan("asset", "assess");
+  const [dragging, setDragging] = useState(false);
 
   return (
     <article
+      // Not while the note editor is open: a draggable ancestor swallows text selection in the textarea.
+      draggable={canUpdate && !notingOpen}
+      onDragStart={(e) => {
+        startAssetDrag(e, asset.id);
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
       className={cn(
         "flex flex-col gap-2 rounded-lg border bg-card p-3 text-card-foreground shadow-xs",
         !rated && "border-dashed",
+        canUpdate && !notingOpen && "cursor-grab active:cursor-grabbing",
+        dragging && "opacity-50",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -264,6 +305,12 @@ function AssetCard({ campusId, roomId, asset }: { campusId: string; roomId: stri
                   <DropdownMenuItem onClick={() => setEditing(true)}>
                     <Icons.ui.edit />
                     Edit
+                  </DropdownMenuItem>
+                )}
+                {canUpdate && (
+                  <DropdownMenuItem onClick={onMove}>
+                    <Icons.move />
+                    Move to room…
                   </DropdownMenuItem>
                 )}
                 {canDelete && (
