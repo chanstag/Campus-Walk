@@ -68,8 +68,12 @@ export function RoomDialog({
 
   async function submit() {
     const fields = { number: form.number, name: form.name, roomType: form.roomType, areaSf, capacity };
-    if (room) await update.mutateAsync({ roomId: room.id, ...fields });
-    else if (floor) onCreated?.(await create.mutateAsync({ floorId: floor.id, ...fields }));
+    try {
+      if (room) await update.mutateAsync({ roomId: room.id, ...fields });
+      else if (floor) onCreated?.(await create.mutateAsync({ floorId: floor.id, ...fields }));
+    } catch {
+      return; // shown inline from the mutation's error; the dialog stays open
+    }
     onOpenChange(false);
   }
 
