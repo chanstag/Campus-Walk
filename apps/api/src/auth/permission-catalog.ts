@@ -7,7 +7,8 @@
 import type { Role } from "./roles.js";
 
 export const PERMISSIONS = {
-  campus: ["read"],
+  district: ["create", "update"],
+  campus: ["read", "create", "update"],
   building: ["create", "update"],
   floor: ["create", "update"],
   room: ["read", "create", "update", "assess"],
@@ -26,6 +27,7 @@ export type PermissionKey = { [R in Resource]: `${R}:${Action<R>}` }[Resource];
 export const RESOURCES = Object.keys(PERMISSIONS) as Resource[];
 
 export const RESOURCE_LABELS: Record<Resource, string> = {
+  district: "Districts",
   campus: "Campuses",
   building: "Buildings",
   floor: "Floors",
@@ -50,7 +52,11 @@ export function isPermissionKey(value: unknown): value is PermissionKey {
 
 /** Shown on the matrix screen next to each row. */
 export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
+  "district:create": "Add districts",
+  "district:update": "Rename a district",
   "campus:read": "Browse campuses, buildings, floors and rooms",
+  "campus:create": "Add campuses to a district",
+  "campus:update": "Edit a campus's name, district, type, address, year opened and site area",
   "building:create": "Add buildings to a campus (each starts with a first floor)",
   "building:update": "Edit a building's name, type, year built and area",
   "floor:create": "Add floors to a building",
@@ -77,7 +83,11 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
 export const DEFAULT_GRANTS: Record<Role, PermissionKey[] | "all"> = {
   admin: "all",
   office: [
+    "district:create",
+    "district:update",
     "campus:read",
+    "campus:create",
+    "campus:update",
     "building:create",
     "building:update",
     "floor:create",

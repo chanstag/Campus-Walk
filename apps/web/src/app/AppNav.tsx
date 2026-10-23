@@ -13,6 +13,7 @@ import {
 const LINKS: { to: string; label: string; icon: LucideIcon; devOnly?: boolean; permission?: PermissionKey }[] = [
   { to: "/walk", label: "Walk", icon: Icons.walk, permission: "campus:read" },
   { to: "/office", label: "Office", icon: Icons.assessment, permission: "summary:read" },
+  { to: "/campuses", label: "Campuses", icon: Icons.campus, permission: "campus:update" },
   { to: "/users", label: "Users", icon: Icons.ui.users, permission: "user:read" },
   { to: "/permissions", label: "Permissions", icon: Icons.ui.permissions, permission: "permission:read" },
   { to: "/design", label: "Design", icon: Icons.ui.settings, devOnly: true },

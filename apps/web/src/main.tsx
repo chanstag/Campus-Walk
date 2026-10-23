@@ -8,6 +8,7 @@ import { PageShell } from "./app/PageShell";
 import { AcceptInvitePage } from "./auth/AcceptInvitePage";
 import { LoginPage } from "./auth/LoginPage";
 import { RequireAuth } from "./auth/RequireAuth";
+import { CampusesPage } from "./campuses/CampusesPage";
 import DesignPage from "./design/DesignPage";
 import { initAccent } from "./hooks/use-accent";
 import { initTheme } from "./hooks/use-theme";
@@ -60,6 +61,9 @@ function Root() {
               </Route>
               <Route element={<RequireAuth permission="summary:read" />}>
                 <Route path="/office" element={<OfficePage />} />
+              </Route>
+              <Route element={<RequireAuth permission="campus:update" />}>
+                <Route path="/campuses" element={<CampusesPage />} />
               </Route>
               <Route element={<RequireAuth permission="user:read" />}>
                 <Route path="/users" element={<UsersPage />} />
