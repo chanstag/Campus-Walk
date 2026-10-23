@@ -31,7 +31,7 @@ import { startAssetDrag } from "./drag";
 import { FinishRoomDialog } from "./FinishRoomDialog";
 import { MoveAssetDialog } from "./MoveAssetDialog";
 import { RoomDialog } from "./RoomDialog";
-import { assetListOptions, useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
+import { assetListOptions, submitWrite, useAssessAsset, useRemoveAsset, useUpdateAsset } from "./mutations";
 import { type AssetLocation, type AssetWithType, isRoomLocation, type Room } from "./types";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
@@ -88,7 +88,6 @@ export function AssetGrid({
       )}
       {assets.data && assets.data.length > 0 && (
         <AssetSections
-          campusId={campusId}
           location={location}
           assets={assets.data}
           unrated={unrated}
@@ -96,7 +95,7 @@ export function AssetGrid({
         />
       )}
 
-      {adding && <AssetDialog open onOpenChange={setAdding} campusId={campusId} location={location} />}
+      {adding && <AssetDialog open onOpenChange={setAdding} location={location} />}
       {moving && (
         <MoveAssetDialog
           open
@@ -142,7 +141,7 @@ export function RoomAssets({ campusId, room }: { campusId: string; room: Room })
         )}
       />
       {finishing && (
-        <FinishRoomDialog open onOpenChange={setFinishing} campusId={campusId} room={room} unratedCount={unrated} />
+        <FinishRoomDialog open onOpenChange={setFinishing} room={room} unratedCount={unrated} />
       )}
       {editingRoom && <RoomDialog open onOpenChange={setEditingRoom} campusId={campusId} room={room} />}
     </>
@@ -223,13 +222,11 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 /** The API already sorts by category, type, install year, so grouping preserves order. */
 function AssetSections({
-  campusId,
   location,
   assets,
   unrated,
   onMove,
 }: {
-  campusId: string;
   location: AssetLocation;
   assets: AssetWithType[];
   unrated: number;
@@ -264,7 +261,7 @@ function AssetSections({
             </h3>
             <Grid>
               {items.map((a) => (
-                <AssetCard key={a.id} campusId={campusId} location={location} asset={a} onMove={() => onMove(a)} />
+                <AssetCard key={a.id} location={location} asset={a} onMove={() => onMove(a)} />
               ))}
             </Grid>
           </section>
@@ -279,18 +276,16 @@ function Grid({ children }: { children: React.ReactNode }) {
 }
 
 function AssetCard({
-  campusId,
   location,
   asset,
   onMove,
 }: {
-  campusId: string;
   location: AssetLocation;
   asset: AssetWithType;
   onMove: () => void;
 }) {
-  const assess = useAssessAsset(campusId, location);
-  const remove = useRemoveAsset(campusId, location);
+  const assess = useAssessAsset();
+  const remove = useRemoveAsset();
   const [editing, setEditing] = useState(false);
   const [notingOpen, setNotingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -366,7 +361,7 @@ function AssetCard({
         {asset.installYear != null && <span>Installed {asset.installYear}</span>}
       </p>
       {notingOpen ? (
-        <NoteEditor campusId={campusId} location={location} asset={asset} onDone={() => setNotingOpen(false)} />
+        <NoteEditor asset={asset} onDone={() => setNotingOpen(false)} />
       ) : (
         asset.notes && <p className="text-sm whitespace-pre-line">{asset.notes}</p>
       )}
@@ -375,8 +370,10 @@ function AssetCard({
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
         <ConditionPicker
           value={asset.condition}
-          disabled={assess.isPending || !canAssess}
-          onChange={(condition) => assess.mutate({ assetId: asset.id, condition })}
+          // Not disabled while a rating is pending: offline it stays pending until reconnect, and the
+          // outbox applies taps in order, so the last one wins.
+          disabled={!canAssess}
+          onChange={(condition) => assess.mutate({ assetId: asset.id, condition, assessedAt: new Date() })}
         />
         {canUpdate && !notingOpen && (
           <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setNotingOpen(true)}>
@@ -387,7 +384,7 @@ function AssetCard({
       </div>
       {assess.error && <p className="text-xs text-destructive">{assess.error.message}</p>}
 
-      {editing && <AssetDialog open onOpenChange={setEditing} campusId={campusId} location={location} asset={asset} />}
+      {editing && <AssetDialog open onOpenChange={setEditing} location={location} asset={asset} />}
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -411,22 +408,18 @@ function AssetCard({
 
 /** Inline note editing on the card, so a quick observation doesn't need the full edit dialog. */
 function NoteEditor({
-  campusId,
-  location,
   asset,
   onDone,
 }: {
-  campusId: string;
-  location: AssetLocation;
   asset: AssetWithType;
   onDone: () => void;
 }) {
-  const update = useUpdateAsset(campusId, location);
+  const update = useUpdateAsset();
   const [notes, setNotes] = useState(asset.notes ?? "");
   const unchanged = notes.trim() === (asset.notes ?? "");
   const save = () => {
     if (unchanged) return onDone();
-    update.mutate({ assetId: asset.id, notes: notes.trim() }, { onSuccess: onDone });
+    void submitWrite(update, { assetId: asset.id, notes: notes.trim() }).then(onDone, () => {});
   };
 
   return (

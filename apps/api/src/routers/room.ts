@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, count, eq, isNull, ne } from "drizzle-orm";
+import { and, count, eq, isNull, lte, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { asset, floor, room } from "../db/schema.js";
 import { authorizedProcedure, router } from "../trpc.js";
@@ -68,9 +68,10 @@ export const roomRouter = router({
     }),
 
   /**
-   * Marks the room walked (assessed_at = now) with its own condition and notes.
-   * Unrated assets do not block this; the count comes back so the UI can warn.
-   * Calling it again on a finished room simply updates it.
+   * Marks the room walked (assessed_at = now, or the client's `assessedAt`) with its own condition
+   * and notes. Unrated assets do not block this; the count comes back so the UI can warn.
+   * Calling it again on a finished room simply updates it, unless the stored finish is newer than
+   * `assessedAt` (a late offline replay), in which case the room comes back unchanged.
    */
   finish: authorizedProcedure("room", "assess")
     .input(
@@ -78,18 +79,25 @@ export const roomRouter = router({
         roomId: z.uuid(),
         condition: z.number().int().min(1).max(5).nullable().optional(),
         notes: text(2000),
+        /** Time of the finish on the device (offline replays); clamped to now. */
+        assessedAt: z
+          .date()
+          .transform((d) => (d > new Date() ? new Date() : d))
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await ctx.db
+      const finishedAt = input.assessedAt ?? new Date();
+      const [written] = await ctx.db
         .update(room)
         .set({
-          assessedAt: new Date(),
+          assessedAt: finishedAt,
           ...(input.condition !== undefined ? { condition: input.condition } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
         })
-        .where(eq(room.id, input.roomId))
+        .where(and(eq(room.id, input.roomId), or(isNull(room.assessedAt), lte(room.assessedAt, finishedAt))))
         .returning();
+      const updated = written ?? (await ctx.db.query.room.findFirst({ where: eq(room.id, input.roomId) }));
       if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
       const [unrated] = await ctx.db
         .select({ n: count() })

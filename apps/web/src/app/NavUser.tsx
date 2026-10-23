@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ROLE_LABELS, isRole } from "api/src/auth/roles";
 import { useNavigate } from "react-router";
-import { signOut, useSession } from "@/auth-client";
+import { signOut } from "@/auth-client";
 import { Icons } from "@/components/icons";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { clearPersistedCache } from "@/offline/persist";
+import { forgetSession, useAppSession } from "@/offline/session";
 
 function initials(name: string, email: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -25,7 +27,7 @@ function initials(name: string, email: string) {
 
 /** Sidebar footer: who is signed in, with a popup for profile details and sign out. */
 export function NavUser() {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending } = useAppSession();
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -47,8 +49,11 @@ export function NavUser() {
 
   async function handleSignOut() {
     await signOut();
-    // Drop every cached query so the next person on this device starts clean.
+    // Drop every cached query, the offline copy and any unsynced writes, so the next person on
+    // this device starts clean.
     qc.clear();
+    forgetSession();
+    await clearPersistedCache();
     navigate("/login", { replace: true });
   }
 

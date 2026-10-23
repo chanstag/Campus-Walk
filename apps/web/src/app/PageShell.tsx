@@ -13,6 +13,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SyncStatus } from "@/offline/SyncStatus";
 import { AppNav } from "./AppNav";
 import { NavUser } from "./NavUser";
 
@@ -70,7 +71,10 @@ export function PageShell({
                 </span>
               ))}
             </nav>
-            <ThemeToggle className="ml-auto" />
+            <div className="ml-auto flex items-center gap-2">
+              <SyncStatus />
+              <ThemeToggle />
+            </div>
           </header>
 
           <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>

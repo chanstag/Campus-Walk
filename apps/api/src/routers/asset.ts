@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { asset, assetPhoto, building, room } from "../db/schema.js";
 import { blobStore } from "../storage/index.js";
@@ -32,6 +32,16 @@ const text = (max: number) =>
     .optional();
 
 const condition = z.number().int().min(1).max(5);
+
+/**
+ * When the rating was made on the device. Offline writes replay late, so the server keeps the
+ * newest tap: a write older than the stored `assessed_at` is ignored. A device clock ahead of the
+ * server is clamped to now rather than rejected, so the write is not lost.
+ */
+const assessedAt = z
+  .date()
+  .transform((d) => (d > new Date() ? new Date() : d))
+  .optional();
 
 /** Descriptive fields shared by create and update. Condition is handled by `assess`. */
 const descriptive = {
@@ -94,34 +104,56 @@ export const assetRouter = router({
     }),
 
   /**
+   * Every asset in a campus, rooms and building level alike, sorted like `byRoom`. The walk screen
+   * uses it to fill each room's cache in one request so rooms not yet opened work offline.
+   */
+  byCampus: authorizedProcedure("asset", "read")
+    .input(z.object({ campusId: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const buildings = ctx.db.select({ id: building.id }).from(building).where(eq(building.campusId, input.campusId));
+      const rows = await fetchAssets(ctx.db, inArray(asset.buildingId, buildings));
+      return rows.sort(byTypeThenYear);
+    }),
+
+  /**
    * Adds an asset to a room (building derived from the room) or to a building's building level.
-   * A condition given here counts as an assessment.
+   * A condition given here counts as an assessment. The client may pick the id (offline creates);
+   * repeating a create with the same id returns the existing row instead of inserting twice.
    */
   create: authorizedProcedure("asset", "create")
     .input(
       z
         .object({
+          id: z.uuid().optional(),
           ...location,
           assetTypeId: z.uuid(),
           quantity: z.number().int().min(1).default(1),
           condition: condition.nullable().default(null),
+          assessedAt,
           ...descriptive,
         })
         .refine(oneLocation, oneLocationError),
     )
     .mutation(async ({ ctx, input }) => {
-      const { roomId, buildingId, condition: rating, ...rest } = input;
+      if (input.id) {
+        const [existing] = await fetchAssets(ctx.db, eq(asset.id, input.id));
+        if (existing) return existing;
+      }
+      const { id, roomId, buildingId, condition: rating, assessedAt: ratedAt, ...rest } = input;
       const placed = await resolveLocation(ctx.db, { roomId, buildingId });
       const [inserted] = await ctx.db
         .insert(asset)
         .values({
+          id,
           ...placed,
           condition: rating,
-          assessedAt: rating == null ? null : new Date(),
+          assessedAt: rating == null ? null : (ratedAt ?? new Date()),
           ...rest,
         })
+        // A concurrent replay of the same create lost the race; the row is there either way.
+        .onConflictDoNothing({ target: asset.id })
         .returning({ id: asset.id });
-      const [created] = await fetchAssets(ctx.db, eq(asset.id, inserted!.id));
+      const [created] = await fetchAssets(ctx.db, eq(asset.id, inserted?.id ?? id!));
       return created!;
     }),
 
@@ -157,19 +189,23 @@ export const assetRouter = router({
       return moved!;
     }),
 
-  /** Records the current condition. assessed_by stays null until auth exists. */
+  /**
+   * Records the current condition. With `assessedAt` (the time of the tap), a write older than the
+   * stored rating is ignored and the current row comes back unchanged. assessed_by stays null for now.
+   */
   assess: authorizedProcedure("asset", "assess")
-    .input(z.object({ assetId: z.uuid(), condition: condition.nullable(), notes: text(2000) }))
+    .input(z.object({ assetId: z.uuid(), condition: condition.nullable(), notes: text(2000), assessedAt }))
     .mutation(async ({ ctx, input }) => {
       await requireAsset(ctx.db, input.assetId);
+      const ratedAt = input.assessedAt ?? new Date();
       await ctx.db
         .update(asset)
         .set({
           condition: input.condition,
-          assessedAt: input.condition == null ? null : new Date(),
+          assessedAt: input.condition == null ? null : ratedAt,
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
         })
-        .where(eq(asset.id, input.assetId));
+        .where(and(eq(asset.id, input.assetId), or(isNull(asset.assessedAt), lte(asset.assessedAt, ratedAt))));
       const [updated] = await fetchAssets(ctx.db, eq(asset.id, input.assetId));
       return updated!;
     }),

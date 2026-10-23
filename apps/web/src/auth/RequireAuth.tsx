@@ -1,8 +1,8 @@
 import type { PermissionKey } from "api/src/auth/permission-catalog";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { PageShell } from "@/app/PageShell";
-import { useSession } from "@/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppSession } from "@/offline/session";
 import { hasPermission, usePermissions } from "./permissions";
 
 function Pending() {
@@ -16,10 +16,10 @@ function Pending() {
 /**
  * Layout route: renders the child route only with a session and, when `permission` is given,
  * only if the user's role holds it. Signed-out visitors go to /login and come back to where
- * they were.
+ * they were. Offline, the last session seen on this device counts (see `useAppSession`).
  */
 export function RequireAuth({ permission }: { permission?: PermissionKey }) {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending } = useAppSession();
   const location = useLocation();
   const permissions = usePermissions(!!session && !!permission);
 

@@ -5,6 +5,7 @@ import { useCan } from "@/auth/permissions";
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCampusOffline } from "@/offline/useCampusOffline";
 import { useTRPC } from "@/trpc";
 import { AssetGrid, Empty, RoomAssets } from "./AssetGrid";
 import { CampusTree } from "./CampusTree";
@@ -25,6 +26,7 @@ export function WalkPage() {
 
   // Same query key as the sidebar branch for this campus, so this is a cache read once expanded.
   const tree = useQuery({ ...trpc.campus.tree.queryOptions({ campusId: campusId ?? "" }), enabled: !!campusId });
+  useCampusOffline(campusId, tree.data);
   const buildingHit = findBuilding(tree.data, buildingId);
   const floorHit = findFloor(tree.data, floorId);
   const roomHit = findRoom(tree.data, roomId);

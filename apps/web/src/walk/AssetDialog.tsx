@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Icons } from "@/components/icons";
 import { CONDITION_OPTIONS } from "@/lib/condition";
 import { useTRPC } from "@/trpc";
-import { locationInput, useCreateAsset, useUpdateAsset } from "./mutations";
+import { locationInput, submitWrite, useCreateAsset, useUpdateAsset } from "./mutations";
 import { type AssetLocation, type AssetWithType, isRoomLocation } from "./types";
 
 type Form = {
@@ -55,20 +55,18 @@ const NONE = "__none__";
 export function AssetDialog({
   open,
   onOpenChange,
-  campusId,
   location,
   asset,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  campusId: string;
   location: AssetLocation;
   asset?: AssetWithType;
 }) {
   const trpc = useTRPC();
   const types = useQuery(trpc.assetType.list.queryOptions());
-  const create = useCreateAsset(campusId, location);
-  const update = useUpdateAsset(campusId, location);
+  const create = useCreateAsset();
+  const update = useUpdateAsset();
   const inRoom = isRoomLocation(location);
   const [form, setForm] = useState<Form>(() => fromAsset(asset));
   const [detailsOpen, setDetailsOpen] = useState(() => !!(asset?.assetTag || asset?.manufacturer || asset?.serialNumber));
@@ -101,8 +99,15 @@ export function AssetDialog({
       installYear: form.installYear === "" ? null : Number.parseInt(form.installYear, 10),
       notes: form.notes,
     };
-    if (editing) await update.mutateAsync({ assetId: asset.id, ...fields });
-    else await create.mutateAsync({ ...locationInput(location), condition: form.condition === "" ? null : Number(form.condition), ...fields });
+    if (editing) await submitWrite(update, { assetId: asset.id, ...fields });
+    else
+      await submitWrite(create, {
+        id: crypto.randomUUID(),
+        ...locationInput(location),
+        condition: form.condition === "" ? null : Number(form.condition),
+        assessedAt: new Date(),
+        ...fields,
+      });
     onOpenChange(false);
   }
 

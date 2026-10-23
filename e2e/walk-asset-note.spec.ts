@@ -40,6 +40,8 @@ test.describe("walk: quick note on an asset card", () => {
     await again.getByRole("button", { name: "Edit note" }).click();
     await box.fill("Quick note e2e, replaced");
     await box.press("Control+Enter");
+    // The card shows the new note at once (optimistic); the editor closes when the server confirms.
+    await expect(box).toHaveCount(0);
     await expect(assetCard(page, "Quick note e2e, replaced")).toBeVisible();
     await page.reload();
     await expect(assetCard(page, "Quick note e2e, replaced")).toBeVisible();
