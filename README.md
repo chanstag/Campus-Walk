@@ -126,6 +126,17 @@ pnpm --filter api db:generate     # drizzle-kit: generate a migration from src/d
 pnpm --filter api db:migrate      # drizzle-kit: apply migrations
 ```
 
+## Testing
+
+```bash
+pnpm db:setup:test                      # one-time: Neon branch "test" → apps/api/.env.test, migrate, seed
+pnpm exec playwright install chromium   # one-time
+pnpm test                               # Vitest: API router tests on the test branch + web unit tests
+pnpm test:e2e                           # Playwright: real API (3101) + web (5174) on the test branch
+```
+
+Vitest tests sit next to the code (`*.test.ts`); Playwright specs are one file per feature in `e2e/`. Both use the Neon `test` branch from `apps/api/.env.test` and never the dev database. Conventions and details: `CLAUDE.md` → Testing.
+
 `pnpm db:setup` is idempotent: it exits early if `apps/api/.env` already has `DATABASE_URL`. Set `NEON_PROJECT_NAME` or `NEON_REGION` to override the defaults, `NEON_ORG_ID` if your account belongs to more than one Neon organization, or `NEON_API_KEY` to skip the browser login (CI).
 
 Layout:
