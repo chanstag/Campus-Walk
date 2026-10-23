@@ -100,7 +100,7 @@ export function useFinishRoom(campusId: string, roomId: string) {
   return useMutation(trpc.room.finish.mutationOptions({ onSuccess: () => invalidate() }));
 }
 
-/** Room writes change the tree (names, numbers, counts) and the office lists of unwalked rooms. */
+/** Structure writes (room, floor, building) change the tree and the office lists of unwalked rooms. */
 function useTreeInvalidation(campusId: string) {
   const trpc = useTRPC();
   const qc = useQueryClient();
@@ -121,4 +121,28 @@ export function useUpdateRoom(campusId: string) {
   const trpc = useTRPC();
   const invalidate = useTreeInvalidation(campusId);
   return useMutation(trpc.room.update.mutationOptions({ onSuccess: () => invalidate() }));
+}
+
+export function useCreateFloor(campusId: string) {
+  const trpc = useTRPC();
+  const invalidate = useTreeInvalidation(campusId);
+  return useMutation(trpc.floor.create.mutationOptions({ onSuccess: () => invalidate() }));
+}
+
+export function useUpdateFloor(campusId: string) {
+  const trpc = useTRPC();
+  const invalidate = useTreeInvalidation(campusId);
+  return useMutation(trpc.floor.update.mutationOptions({ onSuccess: () => invalidate() }));
+}
+
+export function useCreateBuilding(campusId: string) {
+  const trpc = useTRPC();
+  const invalidate = useTreeInvalidation(campusId);
+  return useMutation(trpc.building.create.mutationOptions({ onSuccess: () => invalidate() }));
+}
+
+export function useUpdateBuilding(campusId: string) {
+  const trpc = useTRPC();
+  const invalidate = useTreeInvalidation(campusId);
+  return useMutation(trpc.building.update.mutationOptions({ onSuccess: () => invalidate() }));
 }

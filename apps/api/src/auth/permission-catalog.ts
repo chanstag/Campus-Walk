@@ -8,6 +8,8 @@ import type { Role } from "./roles.js";
 
 export const PERMISSIONS = {
   campus: ["read"],
+  building: ["create", "update"],
+  floor: ["create", "update"],
   room: ["read", "create", "update", "assess"],
   asset: ["read", "create", "update", "assess", "delete"],
   /** Office aggregates (`office.*` procedures). */
@@ -25,6 +27,8 @@ export const RESOURCES = Object.keys(PERMISSIONS) as Resource[];
 
 export const RESOURCE_LABELS: Record<Resource, string> = {
   campus: "Campuses",
+  building: "Buildings",
+  floor: "Floors",
   room: "Rooms",
   asset: "Assets",
   summary: "Office summary",
@@ -47,6 +51,10 @@ export function isPermissionKey(value: unknown): value is PermissionKey {
 /** Shown on the matrix screen next to each row. */
 export const PERMISSION_DESCRIPTIONS: Record<PermissionKey, string> = {
   "campus:read": "Browse campuses, buildings, floors and rooms",
+  "building:create": "Add buildings to a campus (each starts with a first floor)",
+  "building:update": "Edit a building's name, type, year built and area",
+  "floor:create": "Add floors to a building",
+  "floor:update": "Edit a floor's level and name",
   "room:read": "See a room's details and assessment",
   "room:create": "Add rooms to a floor",
   "room:update": "Edit a room's number, name, type, area and capacity",
@@ -70,6 +78,10 @@ export const DEFAULT_GRANTS: Record<Role, PermissionKey[] | "all"> = {
   admin: "all",
   office: [
     "campus:read",
+    "building:create",
+    "building:update",
+    "floor:create",
+    "floor:update",
     "room:read",
     "room:create",
     "room:update",

@@ -3,7 +3,9 @@ import { sql } from "drizzle-orm";
 import { assetRouter } from "./routers/asset.js";
 import { assetPhotoRouter } from "./routers/assetPhoto.js";
 import { assetTypeRouter } from "./routers/assetType.js";
+import { buildingRouter } from "./routers/building.js";
 import { campusRouter } from "./routers/campus.js";
+import { floorRouter } from "./routers/floor.js";
 import { inviteRouter } from "./routers/invite.js";
 import { officeRouter } from "./routers/office.js";
 import { permissionsRouter } from "./routers/permissions.js";
@@ -11,7 +13,7 @@ import { roomRouter } from "./routers/room.js";
 import { usersRouter } from "./routers/users.js";
 import { protectedProcedure, router } from "./trpc.js";
 
-// One sub-router per level of the hierarchy. building/floor/room routers slot in here when needed.
+// One sub-router per level of the hierarchy.
 export const appRouter = router({
   health: protectedProcedure.query(async ({ ctx }) => {
     await ctx.db.execute(sql`select 1`);
@@ -19,6 +21,8 @@ export const appRouter = router({
   }),
 
   campus: campusRouter,
+  building: buildingRouter,
+  floor: floorRouter,
   room: roomRouter,
   asset: assetRouter,
   /** Photos on an asset: signed upload/download URLs over the blob store. */

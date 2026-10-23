@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
+import { BuildingDialog } from "./BuildingDialog";
+import { FloorDialog } from "./FloorDialog";
 import { RoomDialog } from "./RoomDialog";
 import { droppedAssetId, isAssetDrag } from "./drag";
 import { useMoveAsset } from "./mutations";
@@ -133,6 +135,9 @@ function Chevron() {
 function CampusBranch({ campusId }: { campusId: string }) {
   const trpc = useTRPC();
   const tree = useQuery(trpc.campus.tree.queryOptions({ campusId }));
+  const { selectFloor } = useSelection();
+  const { can: canCreateBuilding } = useCan("building", "create");
+  const [adding, setAdding] = useState(false);
 
   if (tree.isPending) {
     return (
@@ -153,7 +158,44 @@ function CampusBranch({ campusId }: { campusId: string }) {
       {tree.data.buildings.map((b) => (
         <BuildingNode key={b.id} campusId={campusId} building={b} />
       ))}
+      {canCreateBuilding && <AddRow onClick={() => setAdding(true)}>Add building</AddRow>}
+      {adding && (
+        <BuildingDialog
+          open
+          onOpenChange={setAdding}
+          campusId={campusId}
+          campusName={tree.data.name}
+          onCreated={(created) => selectFloor(campusId, created.floor.id)}
+        />
+      )}
     </SidebarMenuSub>
+  );
+}
+
+/**
+ * Opens a node when the selection moves inside it after mount, e.g. a just-created building or
+ * floor (the tree refetches before the new node is selected). Never collapses.
+ */
+function useExpandOnSelect(selected: boolean, setOpen: (open: boolean) => void) {
+  useEffect(() => {
+    if (selected) setOpen(true);
+  }, [selected, setOpen]);
+}
+
+/** Muted "+ Add …" row at the end of a tree level. */
+function AddRow({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        render={<button type="button" />}
+        className="w-full text-left text-muted-foreground"
+        size="sm"
+        onClick={onClick}
+      >
+        <Icons.ui.add />
+        <span>{children}</span>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
   );
 }
 
@@ -164,10 +206,13 @@ function BuildingNode({
   campusId: string;
   building: Building;
 }) {
-  const { floorId } = useSelection();
+  const { floorId, selectFloor } = useSelection();
   const containsSelection = building.floors.some((f) => f.id === floorId);
   const [open, setOpen] = useState(containsSelection);
   const springOpen = useSpringOpen(open, setOpen);
+  useExpandOnSelect(containsSelection, setOpen);
+  const [adding, setAdding] = useState(false);
+  const { can: canCreateFloor } = useCan("floor", "create");
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -191,9 +236,19 @@ function BuildingNode({
             {building.floors.map((f) => (
               <FloorNode key={f.id} campusId={campusId} floor={f} />
             ))}
+            {canCreateFloor && <AddRow onClick={() => setAdding(true)}>Add floor</AddRow>}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuSubItem>
+      {adding && (
+        <FloorDialog
+          open
+          onOpenChange={setAdding}
+          campusId={campusId}
+          building={building}
+          onCreated={(f) => selectFloor(campusId, f.id)}
+        />
+      )}
     </Collapsible>
   );
 }
@@ -203,6 +258,7 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const isCurrent = floor.id === floorId;
   const [open, setOpen] = useState(isCurrent);
+  useExpandOnSelect(isCurrent, setOpen);
   const [adding, setAdding] = useState(false);
   const { can: canCreateRoom } = useCan("room", "create");
   const springOpen = useSpringOpen(open, setOpen);
@@ -234,19 +290,7 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
             {floor.rooms.map((r) => (
               <RoomNode key={r.id} campusId={campusId} floorId={floor.id} room={r} />
             ))}
-            {canCreateRoom && (
-              <SidebarMenuSubItem>
-                <SidebarMenuSubButton
-                  render={<button type="button" />}
-                  className="w-full text-left text-muted-foreground"
-                  size="sm"
-                  onClick={() => setAdding(true)}
-                >
-                  <Icons.ui.add />
-                  <span>Add room</span>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            )}
+            {canCreateRoom && <AddRow onClick={() => setAdding(true)}>Add room</AddRow>}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuSubItem>

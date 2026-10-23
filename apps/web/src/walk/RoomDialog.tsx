@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, wholeOrNull } from "./form";
 import { useCreateRoom, useUpdateRoom } from "./mutations";
 import type { Floor, Room } from "./types";
 
@@ -30,13 +30,6 @@ function fromRoom(r?: Room): Form {
     areaSf: r?.areaSf == null ? "" : String(r.areaSf),
     capacity: r?.capacity == null ? "" : String(r.capacity),
   };
-}
-
-/** "" → null, otherwise a non-negative whole number; NaN marks invalid input. */
-function wholeOrNull(v: string) {
-  if (v.trim() === "") return null;
-  const n = Number(v);
-  return Number.isInteger(n) && n >= 0 ? n : Number.NaN;
 }
 
 /** Create (no `room`, needs `floor`) or edit a room's descriptive fields. Walk status is set by "Finish room". */
@@ -127,14 +120,5 @@ export function RoomDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
-    </div>
   );
 }

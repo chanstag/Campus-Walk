@@ -5,9 +5,9 @@
 // transactions, so there is no per-test rollback; tests look rows up by room number or
 // asset tag (sample ids are not stored) and avoid depending on each other's writes.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { asset, assetType, room, user } from "../db/schema.js";
+import { asset, assetType, building, campus, room, user } from "../db/schema.js";
 import { appRouter } from "../router.js";
 import type { Context } from "../trpc.js";
 import { seedTestDatabase } from "./seed.js";
@@ -56,6 +56,18 @@ export type Caller = Awaited<ReturnType<typeof callerFor>>;
 export async function findRoomByNumber(number: string) {
   const row = await db.query.room.findFirst({ where: eq(room.number, number), with: { floor: true } });
   if (!row) throw new Error(`No room numbered ${number} in the seed`);
+  return row;
+}
+
+/** Building names repeat across campuses ("Main Building"), so the campus name is required. */
+export async function findBuilding(campusName: string, buildingName: string) {
+  const c = await db.query.campus.findFirst({ where: eq(campus.name, campusName) });
+  if (!c) throw new Error(`No campus named ${campusName} in the seed`);
+  const row = await db.query.building.findFirst({
+    where: and(eq(building.campusId, c.id), eq(building.name, buildingName)),
+    with: { floors: true },
+  });
+  if (!row) throw new Error(`No building ${buildingName} on ${campusName}`);
   return row;
 }
 
