@@ -106,6 +106,53 @@ describe("asset.assess", () => {
   });
 });
 
+describe("asset.move", () => {
+  it("moves an asset into a room in another building, keeping its assessment", async () => {
+    const tagged = await findAssetByTag("CR-1005"); // room 101, Main Building
+    const from = await findRoomByNumber("101");
+    const to = await findRoomByNumber("P101"); // Portable P-1
+    expect(to.floor.buildingId).not.toBe(tagged.buildingId);
+
+    const moved = await caller.asset.move({ assetId: tagged.id, roomId: to.id });
+    expect(moved.roomId).toBe(to.id);
+    expect(moved.buildingId).toBe(to.floor.buildingId);
+    expect(moved.condition).toBe(tagged.condition);
+    expect(moved.assessedAt).toEqual(tagged.assessedAt);
+    expect(moved.assetType.name).toBe(tagged.assetType.name);
+
+    const left = await caller.asset.byRoom({ roomId: from.id });
+    expect(left.some((a) => a.id === tagged.id)).toBe(false);
+    const arrived = await caller.asset.byRoom({ roomId: to.id });
+    expect(arrived.some((a) => a.id === tagged.id)).toBe(true);
+  });
+
+  it("is allowed for field users", async () => {
+    const tagged = await findAssetByTag("CR-1005");
+    const back = await findRoomByNumber("101");
+    const field = await callerFor("field");
+    await expect(field.asset.move({ assetId: tagged.id, roomId: back.id })).resolves.toMatchObject({ roomId: back.id });
+  });
+
+  it("throws NOT_FOUND for an unknown asset or room", async () => {
+    const tagged = await findAssetByTag("CR-1005");
+    const target = await findRoomByNumber("102");
+    await expect(caller.asset.move({ assetId: crypto.randomUUID(), roomId: target.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(caller.asset.move({ assetId: tagged.id, roomId: crypto.randomUUID() })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("requires a session", async () => {
+    const tagged = await findAssetByTag("CR-1005");
+    const target = await findRoomByNumber("102");
+    await expect(anonymousCaller().asset.move({ assetId: tagged.id, roomId: target.id })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+  });
+});
+
 describe("asset.remove", () => {
   it("deletes the asset and then reports NOT_FOUND", async () => {
     const tagged = await findAssetByTag("CR-1006");

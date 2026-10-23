@@ -121,6 +121,27 @@ export const assetRouter = router({
       return updated!;
     }),
 
+  /**
+   * Moves an asset into another room, possibly in another building. Building follows the room;
+   * condition and notes travel with the asset.
+   */
+  move: authorizedProcedure("asset", "update")
+    .input(z.object({ assetId: z.uuid(), roomId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireAsset(ctx.db, input.assetId);
+      const target = await ctx.db.query.room.findFirst({
+        where: eq(room.id, input.roomId),
+        with: { floor: true },
+      });
+      if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
+      await ctx.db
+        .update(asset)
+        .set({ roomId: target.id, buildingId: target.floor.buildingId })
+        .where(eq(asset.id, input.assetId));
+      const [moved] = await fetchAssets(ctx.db, eq(asset.id, input.assetId));
+      return moved!;
+    }),
+
   /** Records the current condition. assessed_by stays null until auth exists. */
   assess: authorizedProcedure("asset", "assess")
     .input(z.object({ assetId: z.uuid(), condition: condition.nullable(), notes: text(2000) }))

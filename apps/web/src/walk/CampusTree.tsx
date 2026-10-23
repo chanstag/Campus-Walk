@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCan } from "@/auth/permissions";
 import { Icons } from "@/components/icons";
 import {
@@ -19,9 +19,12 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc";
 import { RoomDialog } from "./RoomDialog";
-import type { Building, Floor } from "./types";
+import { droppedAssetId, isAssetDrag } from "./drag";
+import { useMoveAsset } from "./mutations";
+import type { Building, Floor, Room } from "./types";
 import { walkedCount } from "./types";
 import { useSelection } from "./useSelection";
 
@@ -47,29 +50,77 @@ export function CampusTree() {
             </p>
           )}
           {campuses.data?.map((c) => (
-            <Collapsible
+            <CampusNode
               key={c.id}
+              campus={c}
+              isActive={c.id === campusId}
               open={open[c.id] ?? false}
-              onOpenChange={(o) => setOpen((prev) => ({ ...prev, [c.id]: o }))}
-            >
-              <SidebarMenuItem>
-                <CollapsibleTrigger
-                  render={<SidebarMenuButton isActive={c.id === campusId} />}
-                >
-                  <Icons.campus />
-                  <span className="truncate">{c.name}</span>
-                  <Chevron />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CampusBranch campusId={c.id} />
-                </CollapsibleContent>
-              </SidebarMenuItem>
-            </Collapsible>
+              setOpen={(o) => setOpen((prev) => ({ ...prev, [c.id]: o }))}
+            />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
   );
+}
+
+function CampusNode({
+  campus,
+  isActive,
+  open,
+  setOpen,
+}: {
+  campus: { id: string; name: string };
+  isActive: boolean;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) {
+  const springOpen = useSpringOpen(open, setOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <SidebarMenuItem>
+        <CollapsibleTrigger render={<SidebarMenuButton isActive={isActive} {...springOpen} />}>
+          <Icons.campus />
+          <span className="truncate">{campus.name}</span>
+          <Chevron />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CampusBranch campusId={campus.id} />
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  );
+}
+
+/** True when a drag event moved to a child of the element, which still counts as "over" it. */
+function staysInside(e: React.DragEvent) {
+  return e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget);
+}
+
+/**
+ * Drag handlers for a collapsed tree node: holding a dragged asset over it for a moment expands
+ * it, so a card can be carried to any room without opening the branch first.
+ */
+function useSpringOpen(open: boolean, setOpen: (open: boolean) => void) {
+  const timer = useRef<number | undefined>(undefined);
+  const cancel = () => {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+  };
+  useEffect(() => cancel, []);
+  return {
+    onDragEnter: (e: React.DragEvent) => {
+      if (open || timer.current !== undefined || !isAssetDrag(e)) return;
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined;
+        setOpen(true);
+      }, 500);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!staysInside(e)) cancel();
+    },
+    onDrop: cancel,
+  };
 }
 
 function Chevron() {
@@ -116,6 +167,7 @@ function BuildingNode({
   const { floorId } = useSelection();
   const containsSelection = building.floors.some((f) => f.id === floorId);
   const [open, setOpen] = useState(containsSelection);
+  const springOpen = useSpringOpen(open, setOpen);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -126,6 +178,7 @@ function BuildingNode({
               render={<button type="button" />}
               className="w-full text-left"
               isActive={containsSelection}
+              {...springOpen}
             />
           }
         >
@@ -152,6 +205,7 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
   const [open, setOpen] = useState(isCurrent);
   const [adding, setAdding] = useState(false);
   const { can: canCreateRoom } = useCan("room", "create");
+  const springOpen = useSpringOpen(open, setOpen);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -164,6 +218,7 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
               size="sm"
               isActive={isCurrent && !roomId}
               onClick={() => selectFloor(campusId, floor.id)}
+              {...springOpen}
             />
           }
         >
@@ -177,30 +232,7 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
         <CollapsibleContent>
           <SidebarMenuSub className="ml-2 mr-0 pl-1.5 pr-0">
             {floor.rooms.map((r) => (
-              <SidebarMenuSubItem key={r.id}>
-                <SidebarMenuSubButton
-                  render={<button type="button" />}
-                  className="w-full text-left"
-                  size="sm"
-                  isActive={r.id === roomId}
-                  onClick={() => {
-                    selectRoom(campusId, floor.id, r.id);
-                    if (isMobile) setOpenMobile(false);
-                  }}
-                >
-                  <Icons.room />
-                  <span className="shrink-0 tabular-nums">{r.number}</span>
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {r.name}
-                  </span>
-                  {r.assessedAt != null && (
-                    <Icons.ui.confirm
-                      className="size-3.5 shrink-0 text-muted-foreground"
-                      aria-label="Walked"
-                    />
-                  )}
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
+              <RoomNode key={r.id} campusId={campusId} floorId={floor.id} room={r} />
             ))}
             {canCreateRoom && (
               <SidebarMenuSubItem>
@@ -231,5 +263,61 @@ function FloorNode({ campusId, floor }: { campusId: string; floor: Floor }) {
         />
       )}
     </Collapsible>
+  );
+}
+
+/** A room row. Also a drop target for asset cards dragged out of the selected room. */
+function RoomNode({ campusId, floorId, room }: { campusId: string; floorId: string; room: Room }) {
+  const selection = useSelection();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const { can: canMove } = useCan("asset", "update");
+  // Drags only start in the selected room's grid, so that room is the source.
+  const move = useMoveAsset(selection.campusId ?? "", selection.roomId ?? "");
+  const [over, setOver] = useState(false);
+  const isCurrent = room.id === selection.roomId;
+  const accepts = (e: React.DragEvent) => canMove && !isCurrent && !!selection.roomId && isAssetDrag(e);
+
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        render={<button type="button" />}
+        className={cn("w-full text-left", over && "bg-sidebar-accent ring-2 ring-sidebar-ring")}
+        size="sm"
+        isActive={isCurrent}
+        onClick={() => {
+          selection.selectRoom(campusId, floorId, room.id);
+          if (isMobile) setOpenMobile(false);
+        }}
+        onDragOver={(e) => {
+          if (!accepts(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!staysInside(e)) setOver(false);
+        }}
+        onDrop={(e) => {
+          setOver(false);
+          const assetId = droppedAssetId(e);
+          if (!accepts(e) || !assetId) return;
+          e.preventDefault();
+          move.mutate({ assetId, roomId: room.id });
+        }}
+      >
+        <Icons.room />
+        <span className="shrink-0 tabular-nums">{room.number}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{room.name}</span>
+        {move.isPending && <Icons.move className="size-3.5 shrink-0 animate-pulse text-muted-foreground" aria-label="Moving" />}
+        {room.assessedAt != null && (
+          <Icons.ui.confirm className="size-3.5 shrink-0 text-muted-foreground" aria-label="Walked" />
+        )}
+      </SidebarMenuSubButton>
+      {move.error && (
+        <p role="alert" className="px-2 py-1 text-xs text-destructive">
+          Could not move asset: {move.error.message}
+        </p>
+      )}
+    </SidebarMenuSubItem>
   );
 }

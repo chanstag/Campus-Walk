@@ -68,6 +68,32 @@ export function useRemoveAsset(campusId: string, roomId: string) {
   return useMutation(trpc.asset.remove.mutationOptions({ onSuccess: () => invalidate() }));
 }
 
+/**
+ * Moves an asset out of `fromRoomId`. Optimistic on the source list so a dropped card leaves the
+ * grid immediately; the destination room's list (any room, any campus) is simply invalidated.
+ */
+export function useMoveAsset(campusId: string, fromRoomId: string) {
+  const trpc = useTRPC();
+  const qc = useQueryClient();
+  const invalidate = useRoomInvalidation(campusId, fromRoomId);
+  const key = trpc.asset.byRoom.queryKey({ roomId: fromRoomId });
+  return useMutation(
+    trpc.asset.move.mutationOptions({
+      onMutate: async (vars) => {
+        await qc.cancelQueries({ queryKey: key });
+        const previous = qc.getQueryData(key);
+        qc.setQueryData(key, (old) => old?.filter((a) => a.id !== vars.assetId));
+        return { previous };
+      },
+      onError: (_err, _vars, context) => {
+        if (context?.previous) qc.setQueryData(key, context.previous);
+      },
+      onSettled: (_data, _err, vars) =>
+        Promise.all([invalidate(), qc.invalidateQueries(trpc.asset.byRoom.queryFilter({ roomId: vars.roomId }))]),
+    }),
+  );
+}
+
 export function useFinishRoom(campusId: string, roomId: string) {
   const trpc = useTRPC();
   const invalidate = useRoomInvalidation(campusId, roomId);
