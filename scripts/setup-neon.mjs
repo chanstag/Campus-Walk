@@ -8,11 +8,13 @@
 // 3. Resolve the organization (NEON_ORG_ID, or the only org on the account).
 // 4. Find or create a Neon project named NEON_PROJECT_NAME (default "campus-walk").
 // 5. Fetch the connection string for its default branch and write it to apps/api/.env.
+// 6. Generate BETTER_AUTH_SECRET if .env has none (runs even when step 1 skips the rest).
 //
 // Uses only Node built-ins and `npx -y neonctl`, so there is nothing to install first.
 // Every neonctl call is non-interactive; anything that would prompt is resolved here instead.
 
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,10 +134,20 @@ function findOrCreateProject(orgId) {
   return { project, connectionString };
 }
 
+/** Add BETTER_AUTH_SECRET to .env if it is missing or empty; never replaces an existing one. */
+function ensureAuthSecret() {
+  const existing = readEnv();
+  if (envValue(existing, "BETTER_AUTH_SECRET")) return;
+  const next = upsertEnv(existing, "BETTER_AUTH_SECRET", randomBytes(32).toString("base64"));
+  writeFileSync(ENV_PATH, next, { mode: 0o600 });
+  log(`Generated BETTER_AUTH_SECRET in ${ENV_PATH}.`);
+}
+
 function main() {
   const existing = readEnv();
   if (envValue(existing, "DATABASE_URL")) {
-    log(`DATABASE_URL already configured in ${ENV_PATH}; nothing to do.`);
+    log(`DATABASE_URL already configured in ${ENV_PATH}; skipping Neon provisioning.`);
+    ensureAuthSecret();
     return;
   }
 
@@ -155,6 +167,7 @@ function main() {
   writeFileSync(ENV_PATH, next, { mode: 0o600 });
   log(`Wrote DATABASE_URL to ${ENV_PATH} (git-ignored).`);
   log(`Neon project: ${project.id}  https://console.neon.tech/app/projects/${project.id}`);
+  ensureAuthSecret();
 }
 
 try {

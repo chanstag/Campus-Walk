@@ -10,56 +10,62 @@ What to build:
 
 The data model is heirarchical Campus → Building → Floor → Room → Asset. 
 
+Setting up for the first time? Skip to [Getting started](#getting-started).
+
 # Data Model
 
-    Campus: one-to-many with Building
-    Building: 
+District → Campus → Building → Floor → Room → Asset, plus an `asset_type` catalog. An asset always belongs to a building and optionally to a room (a null room is a building-level system or unplaced equipment). Assessment (`condition`, `notes`, `assessed_at`) is current state stored on `room` and `asset`. The rules that matter when writing queries are in `CLAUDE.md` → Data model; the source of truth is `apps/api/src/db/schema.ts`.
 
 ```mermaid
   erDiagram
+      DISTRICT ||--o{ CAMPUS : contains
       CAMPUS ||--o{ BUILDING : contains
-      BUILDING ||--o{ ASSESSMENT : "is assessed in"
-      BUILDING ||--o{ ROOM : "Has Many"
-      ASSESSOR ||--o{ ASSESSMENT : performs
-      ASSESSMENT ||--o{ FINDING : records
+      BUILDING ||--|{ FLOOR : "has at least one"
+      FLOOR ||--o{ ROOM : contains
+      BUILDING ||--o{ ASSET : owns
+      ROOM |o--o{ ASSET : "optionally holds"
+      ASSET_TYPE ||--o{ ASSET : classifies
+      ASSET ||--o{ ASSET_PHOTO : has
 
       CAMPUS {
-          int campus_id PK
+          uuid id PK
+          uuid district_id FK
           string name
           string address
       }
       BUILDING {
-          int building_id PK
-          int campus_id FK
+          uuid id PK
+          uuid campus_id FK
           string name
           int year_built
       }
+      FLOOR {
+          uuid id PK
+          uuid building_id FK
+          int level
+          string name
+      }
       ROOM {
-        int room_id PK
-        int building_id FK
-        int condition
-        VARCHAR quality_assessment_condition
+          uuid id PK
+          uuid floor_id FK
+          string number
+          smallint condition
+          timestamp assessed_at
       }
       ASSET {
-        int asset_id PK
-
+          uuid id PK
+          uuid building_id FK
+          uuid room_id FK "nullable"
+          uuid asset_type_id FK
+          string asset_tag
+          int quantity
+          smallint condition
       }
-      ASSESSMENT {
-          int assessment_id PK
-          int building_id FK
-          int assessor_id FK
-          date walk_date
-      }
-      FINDING {
-          int finding_id PK
-          int assessment_id FK
+      ASSET_TYPE {
+          uuid id PK
           string category
-          string severity
-          string notes
-      }
-      ASSESSOR {
-          int assessor_id PK
           string name
+          bool typically_building_level
       }
 ```
 
@@ -109,13 +115,29 @@ BetterAuth
 
 Monorepo managed with pnpm. `apps/api` is a Fastify server exposing a tRPC router backed by Drizzle and Neon Postgres. `apps/web` is a Vite + React SPA that calls the router through TanStack Query with end-to-end types.
 
+Prerequisites:
+
+- Node.js 20 or newer
+- pnpm 10 (`corepack enable` picks up the version pinned in `package.json`)
+- A free [Neon](https://neon.tech) account (`pnpm db:setup` signs you in through the browser)
+- `jq`, only for the test database setup (`pnpm db:setup:test`) and the worktree scripts
+
+First run, from the repo root:
+
 ```bash
-pnpm install          # install both apps
-pnpm db:setup         # one-time: sign in to Neon in the browser, create the "campus-walk" project, write apps/api/.env
-pnpm --filter api db:migrate   # create the tables
-pnpm db:seed          # load the sample district (truncates first)
-pnpm dev              # API on http://localhost:3001, web on http://localhost:5173
+pnpm install                          # install both apps
+pnpm db:setup                         # sign in to Neon, create the "campus-walk" project, write apps/api/.env
+                                      #   (DATABASE_URL, PORT, and a generated BETTER_AUTH_SECRET)
+pnpm --filter api db:migrate          # create the tables
+pnpm --filter api db:seed:permissions # roles, permission catalog, and default grants (safe to re-run)
+pnpm db:seed                          # load the sample district (truncates the campus data first)
+pnpm --filter api auth:create-admin -- --email you@example.com --name "Your Name" --password 'choose-one'
+pnpm dev                              # API on http://localhost:3001, web on http://localhost:5173
 ```
+
+Then open http://localhost:5173 and sign in with the admin account you just created. There is no public sign-up: other users join through invites sent by an admin from the app.
+
+`apps/api/.env.example` lists every variable the API reads. `pnpm db:setup` fills in the required ones; the defaults for the rest (`APP_URL`, `API_URL`) match the ports above. If you already had an `apps/api/.env` without `BETTER_AUTH_SECRET`, re-running `pnpm db:setup` adds one without touching anything else.
 
 Other commands:
 
@@ -137,7 +159,7 @@ pnpm test:e2e                           # Playwright: real API (3101) + web (517
 
 Vitest tests sit next to the code (`*.test.ts`); Playwright specs are one file per feature in `e2e/`. Both use the Neon `test` branch from `apps/api/.env.test` and never the dev database. Conventions and details: `CLAUDE.md` → Testing.
 
-`pnpm db:setup` is idempotent: it exits early if `apps/api/.env` already has `DATABASE_URL`. Set `NEON_PROJECT_NAME` or `NEON_REGION` to override the defaults, `NEON_ORG_ID` if your account belongs to more than one Neon organization, or `NEON_API_KEY` to skip the browser login (CI).
+`pnpm db:setup` is idempotent: it skips Neon if `apps/api/.env` already has `DATABASE_URL`, and only generates `BETTER_AUTH_SECRET` when it is missing. Set `NEON_PROJECT_NAME` or `NEON_REGION` to override the defaults, `NEON_ORG_ID` if your account belongs to more than one Neon organization, or `NEON_API_KEY` to skip the browser login (CI).
 
 Layout:
 
@@ -146,7 +168,9 @@ apps/api/src/router.ts    tRPC procedures; exports AppRouter type consumed by th
 apps/api/src/db/schema.ts Drizzle schema: district → campus → building → floor → room → asset, + asset_type
 apps/api/src/db/seed.ts   loads sample_data/campus_walk_sample_data (see CLAUDE.md "Data model" for the rules)
 apps/web/src/trpc.ts      typed tRPC client + React hooks
-apps/web/src/App.tsx      calls hello + health to prove the full stack
+apps/api/src/auth/        Better Auth setup, roles, permission catalog, create-admin script
+apps/web/src/walk/        field walk screen (campus → building → floor → room → asset)
+apps/web/src/office/      office summary screen
 scripts/setup-neon.mjs    Neon provisioning
 ```
 
